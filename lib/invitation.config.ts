@@ -13,13 +13,13 @@ export const INVITATION = {
   address: "г. Андижан, ул. Навои, 15",
   // Any Google Maps query or coordinates
   mapQuery: "40.7821,72.3442",
-  rsvpDeadline: "до 1 мая 2027",
   bismillah: "بسم الله الرحمن الرحيم",
   bismillahTranslation: "Во имя Аллаха, Милостивого, Милосердного",
   invitationTitle: "Дорогие гости!",
   invitationText:
     "С радостью в сердцах приглашаем вас разделить с нами\nсамый светлый день нашей жизни —\nдень нашей свадьбы.",
   signature: "С любовью, семьи жениха и невесты",
+  finaleText: "Будем счастливы разделить\nэтот день вместе с вами",
 } as const;
 
 export const PALETTE = {
@@ -79,5 +79,5 @@ export const CARD = {
   dioramaZ: -1.2, // the interior "Z = 0" plane
 } as const;
 
-export const SLIDES = ["bismillah", "invitation", "names", "venue", "rsvp"] as const;
+export const SLIDES = ["bismillah", "invitation", "names", "venue", "finale"] as const;
 export type SlideId = (typeof SLIDES)[number];

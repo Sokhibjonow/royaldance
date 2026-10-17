@@ -27,7 +27,7 @@ export const POSES: { closed: Pose; slides: Pose[] } = {
     { look: [0, 0.12, -0.45], halfW: 0.82, halfH: 1.05, focusZ: -0.4 }, // Invitation
     { look: [0, -0.12, -0.5], halfW: 0.84, halfH: 1.1, focusZ: -0.4 }, // Monogram & names
     { look: [0, -0.62, -0.55], halfW: 0.86, halfH: 1.05, focusZ: -0.4 }, // Venue → fountain
-    { look: [0, 0.05, -0.5], halfW: 0.95, halfH: 1.25, focusZ: -0.4 }, // RSVP
+    { look: [0, 0.1, -0.5], halfW: 0.84, halfH: 1.05, focusZ: -0.4 }, // Finale
   ],
 };
 
