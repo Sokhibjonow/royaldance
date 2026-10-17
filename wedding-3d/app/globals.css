@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Cormorant";
+  src: url("/fonts/Cormorant.woff") format("woff");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cormorant";
+  src: url("/fonts/Cormorant-Italic.woff") format("woff");
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Great Vibes";
+  src: url("/fonts/GreatVibes.woff") format("woff");
+  font-display: swap;
+}
+
+@theme {
+  --font-serif: "Cormorant", Georgia, serif;
+  --font-script: "Great Vibes", cursive;
+  --color-ivory: #f6efe4;
+  --color-ink: #4a3b33;
+  --color-rose: #c58f8a;
+  --color-champagne: #b89b72;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #efe6d8;
+  color: var(--color-ink);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* "Rack focus" for DOM-rendered content (RSVP / map) */
+.focus-in {
+  animation: focus-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes focus-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+.foil-text {
+  background: linear-gradient(100deg, #9c7d52 20%, #f6e3b4 45%, #9c7d52 60%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: foil-sweep 3.5s ease-in-out infinite;
+}
+@keyframes foil-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -50% 0; }
+}
+
+@font-face {
+  font-family: "Amiri";
+  src: url("/fonts/Amiri-Arabic.woff") format("woff");
+  font-display: block;
+}
