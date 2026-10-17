@@ -38,7 +38,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* "Rack focus" for DOM-rendered content (RSVP / map) */
+/* "Rack focus" for DOM-rendered content (map link) */
 .focus-in {
   animation: focus-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -53,18 +53,6 @@ body {
     filter: blur(0);
     transform: none;
   }
-}
-
-.foil-text {
-  background: linear-gradient(100deg, #9c7d52 20%, #f6e3b4 45%, #9c7d52 60%) 0 0 / 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: foil-sweep 3.5s ease-in-out infinite;
-}
-@keyframes foil-sweep {
-  from { background-position: 100% 0; }
-  to { background-position: -50% 0; }
 }
 
 @font-face {

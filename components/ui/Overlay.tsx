@@ -1,14 +1,13 @@
 "use client";
 /**
  * DOM layer above the canvas: hints, slide navigation (wheel / swipe / keys),
- * sound toggle, the map card and the RSVP form.
+ * sound toggle and the map link.
  */
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { INVITATION, SLIDES, TIMELINE } from "@/lib/invitation.config";
 import { input, useInvitation } from "@/lib/store";
 import { setMuted } from "@/lib/audio";
-import Rsvp from "./Rsvp";
 
 export default function Overlay() {
   const { phase, slide, muted, next, prev, goTo, toggleMute, setOpen } = useInvitation();
@@ -145,8 +144,6 @@ export default function Overlay() {
         </a>
       )}
 
-      {/* RSVP */}
-      {phase === "open" && id === "rsvp" && <Rsvp />}
     </div>
   );
 }

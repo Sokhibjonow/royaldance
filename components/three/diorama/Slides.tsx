@@ -249,13 +249,17 @@ export function Slides() {
         </Text>
       </Slide>
 
-      {/* 5 — RSVP: headline in 3D, the form itself is DOM (see components/ui/Overlay) */}
+      {/* 5 — Finale */}
       <Slide index={4} mats={m[4]}>
-        <Text {...common} font={FONTS.script} fontSize={0.19} position={[0, 0.72, 0]} material={m[4].foil}>
+        <Text {...common} font={FONTS.script} fontSize={0.24} position={[0, 0.38, 0]} material={m[4].foil}>
           Ждём вас!
         </Text>
-        <Text {...common} font={FONTS.italic} fontSize={0.058} position={[0, 0.56, 0]} material={m[4].soft}>
-          {`Пожалуйста, подтвердите присутствие ${I.rsvpDeadline}`}
+        <Text {...common} font={FONTS.italic} fontSize={0.064} maxWidth={1.3} lineHeight={1.35} position={[0, 0.12, 0]} material={m[4].soft}>
+          {I.finaleText}
+        </Text>
+        <Divider y={-0.1} mats={m[4]} w={0.26} />
+        <Text {...common} font={FONTS.script} fontSize={0.15} position={[0, -0.3, 0]} material={m[4].foil}>
+          {`${I.groom} & ${I.bride}`}
         </Text>
       </Slide>
     </group>
