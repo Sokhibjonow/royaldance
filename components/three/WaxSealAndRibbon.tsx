@@ -1,83 +1,89 @@
 "use client";
 /**
- * WaxSealAndRibbon.tsx — 3D wax seal (irregular poured edge, embossed rose,
- * clear-coated wax) on top of a silk-satin bow and belly band.
- * Click on the seal → it lifts toward the camera, spins and flies off to the
- * right; the bow unties (vertex-deformed strips) and the band slides away.
+ * WaxSealAndRibbon.tsx — oval dusty-pink wax seal with an embossed bouquet,
+ * sitting on an ivory raw-edged silk ribbon tied in a bow.
+ * Tap the seal → it pops toward the camera and drops away to the bottom
+ * right; the bow loosens, its loops slip off and the band slides away.
  */
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { RoundedBox } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
 import { CARD, PALETTE, TEXTURES, TIMELINE } from "@/lib/invitation.config";
 import { input, useInvitation } from "@/lib/store";
 import { RibbonStrip, v, type StripDef } from "@/lib/ribbon";
-import { makeWaxSeal } from "@/lib/textures";
+import { normalFromCanvas } from "@/lib/textures";
+import { drawSealBouquet, makeFrayedRibbonAlpha } from "@/lib/illustrations";
 import { useOptionalTexture } from "@/lib/assets";
 import { haptic, paperRustle, ribbonSwish, startMusic, waxPop } from "@/lib/audio";
 
 const FRONT = CARD.thickness + 0.004; // outer paper surface (incl. bevel)
-const SEAL_R = 0.2;
+const Y = -0.12; // ribbon height on the card
+const SEAL = { rx: 0.21, ry: 0.26 };
 
 // ------------------------------------------------------------- ribbon ---
 const W = CARD.flapWidth;
+const Z = FRONT + 0.006;
 const STRIPS: StripDef[] = [
   // belly band, left half: wraps around the hinge edge into the knot
   {
-    from: [v(-W - 0.03, 0, -0.05), v(-W - 0.012, 0, FRONT * 0.5), v(-W + 0.05, 0, FRONT + 0.004), v(-0.6, 0, FRONT + 0.005), v(-0.25, 0, FRONT + 0.006), v(-0.05, 0, FRONT + 0.03)],
-    to: [v(-3.6, -1.4, 0.3), v(-3.3, -1.25, 0.4), v(-2.9, -1.1, 0.5), v(-2.4, -0.95, 0.65), v(-2.0, -0.8, 0.75), v(-1.7, -0.7, 0.8)],
+    from: [v(-W - 0.03, Y, -0.06), v(-W - 0.012, Y, FRONT * 0.5), v(-W + 0.06, Y + 0.01, Z), v(-0.6, Y - 0.01, Z), v(-0.25, Y + 0.005, Z + 0.004), v(-0.05, Y, Z + 0.03)],
+    to: [v(-3.4, Y - 0.6, 0.2), v(-3.1, Y - 0.55, 0.3), v(-2.7, Y - 0.5, 0.4), v(-2.3, Y - 0.45, 0.5), v(-1.9, Y - 0.4, 0.55), v(-1.6, Y - 0.35, 0.6)],
     hint: v(0, 1, 0),
-    width: 0.13,
-    wave: 0.4,
+    width: 0.17,
+    wave: 0.3,
   },
   // belly band, right half
   {
-    from: [v(W + 0.03, 0, -0.05), v(W + 0.012, 0, FRONT * 0.5), v(W - 0.05, 0, FRONT + 0.004), v(0.6, 0, FRONT + 0.005), v(0.25, 0, FRONT + 0.006), v(0.05, 0, FRONT + 0.03)],
-    to: [v(3.6, -1.2, 0.3), v(3.3, -1.1, 0.4), v(2.9, -0.95, 0.5), v(2.4, -0.8, 0.65), v(2.0, -0.7, 0.75), v(1.7, -0.6, 0.8)],
+    from: [v(W + 0.03, Y, -0.06), v(W + 0.012, Y, FRONT * 0.5), v(W - 0.06, Y - 0.01, Z), v(0.6, Y + 0.012, Z), v(0.25, Y - 0.004, Z + 0.004), v(0.05, Y, Z + 0.03)],
+    to: [v(3.4, Y - 0.5, 0.2), v(3.1, Y - 0.45, 0.3), v(2.7, Y - 0.4, 0.4), v(2.3, Y - 0.35, 0.5), v(1.9, Y - 0.3, 0.55), v(1.6, Y - 0.25, 0.6)],
     hint: v(0, 1, 0),
-    width: 0.13,
-    wave: 0.4,
+    width: 0.17,
+    wave: 0.3,
   },
   // left loop
   {
-    from: [v(0, 0.01, 0.07), v(-0.12, 0.09, 0.075), v(-0.3, 0.17, 0.07), v(-0.45, 0.1, 0.06), v(-0.44, -0.04, 0.055), v(-0.27, -0.05, 0.06), v(-0.1, -0.02, 0.066), v(0, 0, 0.072)],
-    to: [v(-0.4, 0.1, 0.3), v(-0.8, 0.3, 0.45), v(-1.3, 0.5, 0.55), v(-1.8, 0.55, 0.6), v(-2.3, 0.45, 0.6), v(-2.8, 0.3, 0.55), v(-3.2, 0.1, 0.5), v(-3.6, -0.1, 0.45)],
+    from: [v(0, Y + 0.01, 0.075), v(-0.13, Y + 0.08, 0.08), v(-0.34, Y + 0.15, 0.075), v(-0.52, Y + 0.08, 0.06), v(-0.5, Y - 0.06, 0.055), v(-0.3, Y - 0.07, 0.06), v(-0.11, Y - 0.03, 0.068), v(0, Y, 0.075)],
+    mid: [v(0, Y + 0.01, 0.075), v(-0.17, Y + 0.13, 0.09), v(-0.45, Y + 0.24, 0.09), v(-0.7, Y + 0.12, 0.075), v(-0.68, Y - 0.1, 0.065), v(-0.4, Y - 0.12, 0.07), v(-0.14, Y - 0.05, 0.072), v(0, Y, 0.075)],
+    to: [v(-0.5, Y + 0.05, 0.25), v(-0.9, Y + 0.15, 0.35), v(-1.4, Y + 0.25, 0.45), v(-1.9, Y + 0.25, 0.5), v(-2.4, Y + 0.15, 0.5), v(-2.9, Y, 0.45), v(-3.3, Y - 0.15, 0.4), v(-3.7, Y - 0.3, 0.35)],
     hint: v(0, 0, 1),
     mode: "cross",
-    width: 0.12,
-    wave: 0.6,
-    twist: 2.2,
+    width: 0.16,
+    wave: 0.5,
+    twist: 1.6,
   },
   // right loop
   {
-    from: [v(0, 0.01, 0.07), v(0.12, 0.08, 0.075), v(0.31, 0.15, 0.07), v(0.46, 0.08, 0.06), v(0.43, -0.06, 0.055), v(0.26, -0.06, 0.06), v(0.1, -0.02, 0.066), v(0, 0, 0.072)],
-    to: [v(0.4, 0.15, 0.3), v(0.8, 0.35, 0.45), v(1.3, 0.55, 0.55), v(1.8, 0.6, 0.6), v(2.3, 0.5, 0.6), v(2.8, 0.35, 0.55), v(3.2, 0.15, 0.5), v(3.6, -0.05, 0.45)],
+    from: [v(0, Y + 0.01, 0.075), v(0.13, Y + 0.07, 0.08), v(0.35, Y + 0.13, 0.075), v(0.53, Y + 0.06, 0.06), v(0.49, Y - 0.08, 0.055), v(0.29, Y - 0.08, 0.06), v(0.11, Y - 0.03, 0.068), v(0, Y, 0.075)],
+    mid: [v(0, Y + 0.01, 0.075), v(0.17, Y + 0.12, 0.09), v(0.46, Y + 0.22, 0.09), v(0.72, Y + 0.1, 0.075), v(0.67, Y - 0.12, 0.065), v(0.39, Y - 0.13, 0.07), v(0.14, Y - 0.05, 0.072), v(0, Y, 0.075)],
+    to: [v(0.5, Y + 0.08, 0.25), v(0.9, Y + 0.18, 0.35), v(1.4, Y + 0.28, 0.45), v(1.9, Y + 0.28, 0.5), v(2.4, Y + 0.18, 0.5), v(2.9, Y + 0.05, 0.45), v(3.3, Y - 0.1, 0.4), v(3.7, Y - 0.25, 0.35)],
     hint: v(0, 0, 1),
     mode: "cross",
-    width: 0.12,
-    wave: 0.6,
-    twist: -2.4,
+    width: 0.16,
+    wave: 0.5,
+    twist: -1.7,
   },
-  // left tail
+  // left tail, hanging long like the reference
   {
-    from: [v(-0.02, -0.02, 0.07), v(-0.07, -0.14, 0.062), v(-0.13, -0.3, 0.052), v(-0.2, -0.48, 0.045), v(-0.25, -0.66, 0.04)],
-    to: [v(-0.6, -0.3, 0.4), v(-1.1, -0.6, 0.55), v(-1.6, -0.95, 0.6), v(-2.1, -1.3, 0.6), v(-2.6, -1.7, 0.55)],
+    from: [v(-0.02, Y - 0.02, 0.07), v(-0.08, Y - 0.17, 0.064), v(-0.15, Y - 0.36, 0.055), v(-0.22, Y - 0.56, 0.047), v(-0.27, Y - 0.78, 0.042)],
+    mid: [v(-0.02, Y - 0.02, 0.075), v(-0.12, Y - 0.15, 0.07), v(-0.24, Y - 0.32, 0.062), v(-0.36, Y - 0.5, 0.055), v(-0.46, Y - 0.68, 0.05)],
+    to: [v(-0.6, Y - 0.2, 0.3), v(-1.1, Y - 0.45, 0.42), v(-1.6, Y - 0.75, 0.5), v(-2.1, Y - 1.05, 0.5), v(-2.6, Y - 1.4, 0.45)],
     hint: v(0, 0, 1),
     mode: "cross",
-    width: 0.12,
-    wave: 0.7,
-    twist: 3,
+    width: 0.15,
+    wave: 0.6,
+    twist: 2.4,
   },
   // right tail
   {
-    from: [v(0.02, -0.02, 0.07), v(0.06, -0.15, 0.062), v(0.11, -0.32, 0.052), v(0.16, -0.5, 0.045), v(0.19, -0.7, 0.04)],
-    to: [v(0.6, -0.25, 0.4), v(1.1, -0.55, 0.55), v(1.6, -0.9, 0.6), v(2.1, -1.25, 0.6), v(2.6, -1.6, 0.55)],
+    from: [v(0.02, Y - 0.02, 0.07), v(0.07, Y - 0.18, 0.064), v(0.13, Y - 0.38, 0.055), v(0.19, Y - 0.58, 0.047), v(0.23, Y - 0.8, 0.042)],
+    mid: [v(0.02, Y - 0.02, 0.075), v(0.11, Y - 0.16, 0.07), v(0.23, Y - 0.33, 0.062), v(0.35, Y - 0.52, 0.055), v(0.45, Y - 0.7, 0.05)],
+    to: [v(0.6, Y - 0.15, 0.3), v(1.1, Y - 0.4, 0.42), v(1.6, Y - 0.7, 0.5), v(2.1, Y - 1.0, 0.5), v(2.6, Y - 1.35, 0.45)],
     hint: v(0, 0, 1),
     mode: "cross",
-    width: 0.12,
-    wave: 0.7,
-    twist: -3,
+    width: 0.15,
+    wave: 0.6,
+    twist: -2.4,
   },
 ];
 
@@ -85,33 +91,35 @@ function Ribbon() {
   const phase = useInvitation((s) => s.phase);
   const progress = useRef({ value: 0 });
   const [gone, setGone] = useState(false);
-  const group = useRef<THREE.Group>(null!);
   const knot = useRef<THREE.Mesh>(null!);
   const strips = useMemo(() => STRIPS.map((d) => new RibbonStrip(d)), []);
-  const material = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: PALETTE.ribbon,
-        roughness: 0.42,
-        metalness: 0,
-        sheen: 1,
-        sheenRoughness: 0.32,
-        sheenColor: new THREE.Color(PALETTE.ribbonSheen),
-        anisotropy: 0.75,
-        clearcoat: 0.15,
-        clearcoatRoughness: 0.4,
-        side: THREE.DoubleSide,
-        transparent: true,
-      }),
-    []
-  );
+  const material = useMemo(() => {
+    const alpha = makeFrayedRibbonAlpha();
+    alpha.repeat.set(3, 1);
+    return new THREE.MeshPhysicalMaterial({
+      color: PALETTE.ribbon,
+      roughness: 0.6,
+      sheen: 0.7,
+      sheenRoughness: 0.5,
+      sheenColor: new THREE.Color(PALETTE.ribbonSheen),
+      anisotropy: 0.5,
+      alphaMap: alpha,
+      alphaTest: 0.35,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+  }, []);
 
   useEffect(() => {
     if (phase !== "opening") return;
+    const D = TIMELINE.ribbonDuration;
     const tl = gsap.timeline({ delay: TIMELINE.ribbonUntie });
-    tl.to(progress.current, { value: 1, duration: 1.5, ease: "power2.in" })
-      .to(knot.current.scale, { x: 0, y: 0, z: 0, duration: 0.35, ease: "back.in(2)" }, 0)
-      .to(material, { opacity: 0, duration: 0.6, ease: "power1.in" }, 0.75)
+    // slow loosening (loops widen), then the ribbon slips away
+    tl.to(progress.current, { value: 0.4, duration: D * 0.45, ease: "sine.inOut" })
+      .to(progress.current, { value: 1, duration: D * 0.55, ease: "power2.in" })
+      .to(knot.current.scale, { x: 1.3, y: 1.15, duration: D * 0.45, ease: "sine.inOut" }, 0)
+      .to(knot.current.scale, { x: 0, y: 0, z: 0, duration: 0.3, ease: "back.in(2)" }, D * 0.5)
+      .to(material, { opacity: 0, duration: 0.45, ease: "power1.in" }, D * 0.75)
       .add(() => setGone(true));
     return () => {
       tl.kill();
@@ -125,11 +133,13 @@ function Ribbon() {
 
   if (gone) return null;
   return (
-    <group ref={group}>
+    <group>
       {strips.map((s, i) => (
         <mesh key={i} geometry={s.geometry} material={material} castShadow receiveShadow raycast={() => null} />
       ))}
-      <RoundedBox ref={knot} args={[0.1, 0.14, 0.05]} radius={0.02} smoothness={3} position={[0, 0, 0.07]} material={material} castShadow />
+      <mesh ref={knot} position={[0, Y, 0.08]} material={material} castShadow raycast={() => null}>
+        <capsuleGeometry args={[0.045, 0.07, 6, 16]} />
+      </mesh>
     </group>
   );
 }
@@ -137,23 +147,23 @@ function Ribbon() {
 // --------------------------------------------------------------- seal ---
 function sealGeometry() {
   const shape = new THREE.Shape();
-  const n = 96;
+  const n = 128;
   for (let i = 0; i <= n; i++) {
     const a = (i / n) * Math.PI * 2;
-    // poured wax: irregular, puddled rim
-    const r = SEAL_R * (1 + 0.045 * Math.sin(5 * a + 1) + 0.03 * Math.sin(9 * a + 2.4) + 0.018 * Math.sin(17 * a));
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
+    // pressed oval with a barely irregular poured rim
+    const k = 1 + 0.012 * Math.sin(7 * a + 1) + 0.008 * Math.sin(13 * a);
+    const x = Math.cos(a) * SEAL.rx * k;
+    const y = Math.sin(a) * SEAL.ry * k;
     if (i === 0) shape.moveTo(x, y);
     else shape.lineTo(x, y);
   }
   const g = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.022,
+    depth: 0.02,
     bevelEnabled: true,
-    bevelThickness: 0.018,
-    bevelSize: 0.024,
-    bevelSegments: 6,
-    curveSegments: 48,
+    bevelThickness: 0.02,
+    bevelSize: 0.022,
+    bevelSegments: 8,
+    curveSegments: 64,
   });
   g.center();
   return g;
@@ -170,35 +180,29 @@ function WaxSeal() {
   const painted = useOptionalTexture(TEXTURES.seal);
 
   const material = useMemo(() => {
-    const t = makeWaxSeal(PALETTE.wax);
-    const stamp = SEAL_R * 0.95;
-    for (const tex of [t.map, t.normalMap]) {
-      tex.repeat.set(1 / (2 * stamp), 1 / (2 * stamp));
-      tex.offset.set(0.5, 0.5);
-    }
+    const normalMap = normalFromCanvas(drawSealBouquet(512), 5, 3);
+    // cap UVs are the shape's x/y → map the stamp onto the oval
+    normalMap.repeat.set(1 / (2 * SEAL.rx * 1.02), 1 / (2 * SEAL.ry * 1.02));
+    normalMap.offset.set(0.5, 0.5);
     return new THREE.MeshPhysicalMaterial({
-      map: t.map,
-      normalMap: t.normalMap,
-      normalScale: new THREE.Vector2(1.6, 1.6),
-      roughness: 0.4,
-      clearcoat: 0.3,
-      clearcoatRoughness: 0.28,
-      sheen: 0.5,
-      sheenColor: new THREE.Color("#ffd9d6"),
-      sheenRoughness: 0.5,
-      // a touch of light scattering through the wax
-      transmission: 0.06,
-      thickness: 0.3,
-      attenuationColor: new THREE.Color("#b1585e"),
-      attenuationDistance: 0.4,
+      color: PALETTE.wax,
+      normalMap,
+      normalScale: new THREE.Vector2(1.4, 1.4),
+      roughness: 0.5,
+      clearcoat: 0.18,
+      clearcoatRoughness: 0.4,
+      sheen: 0.4,
+      sheenColor: new THREE.Color("#ffe9e6"),
+      sheenRoughness: 0.6,
     });
   }, []);
 
   useEffect(() => {
     if (!painted) return;
-    painted.repeat.copy(material.map!.repeat);
-    painted.offset.copy(material.map!.offset);
+    painted.repeat.copy(material.normalMap!.repeat);
+    painted.offset.copy(material.normalMap!.offset);
     material.map = painted;
+    material.color.set("#ffffff");
     material.needsUpdate = true;
   }, [painted, material]);
 
@@ -206,12 +210,12 @@ function WaxSeal() {
     if (phase !== "opening") return;
     const o = outer.current;
     const tl = gsap.timeline({ delay: TIMELINE.sealLift });
-    // 1. pops free from the wax bed toward the camera, tilting
-    tl.to(o.position, { z: o.position.z + 0.6, duration: 0.55, ease: "power2.out" })
-      .to(o.rotation, { x: -0.45, y: 0.35, duration: 0.55, ease: "power2.out" }, 0)
-      // 2. tumbles away to the right, out of frame
-      .to(o.position, { x: 3.6, y: 0.7, z: 1.4, duration: 1.15, ease: "power2.in" }, TIMELINE.sealExit)
-      .to(o.rotation, { z: -2.8, y: 1.6, x: 0.4, duration: 1.15, ease: "power1.in" }, TIMELINE.sealExit)
+    // 1. pops free from the ribbon toward the camera
+    tl.to(o.position, { z: o.position.z + 0.28, duration: 0.4, ease: "power2.out" })
+      .to(o.rotation, { x: -0.25, y: 0.2, duration: 0.4, ease: "power2.out" }, 0)
+      // 2. tips over and drops away to the bottom right, out of frame
+      .to(o.position, { x: 0.75, y: -2.2, z: 0.9, duration: 1.1, ease: "power2.in" }, TIMELINE.sealExit)
+      .to(o.rotation, { x: 1.25, y: 0.5, z: -0.7, duration: 1.1, ease: "power1.in" }, TIMELINE.sealExit)
       .add(() => setGone(true));
     return () => {
       tl.kill();
@@ -220,8 +224,8 @@ function WaxSeal() {
 
   useFrame(({ clock }, dt) => {
     if (phase !== "idle") return;
-    // idle: gently "invites" a click
-    const s = 1 + Math.sin(clock.elapsedTime * 2.2) * 0.012 + (hover ? 0.05 : 0);
+    // idle: gently "invites" a tap
+    const s = 1 + Math.sin(clock.elapsedTime * 2.2) * 0.01 + (hover ? 0.04 : 0);
     const k = 1 - Math.exp(-dt * 10);
     inner.current.scale.x += (s - inner.current.scale.x) * k;
     inner.current.scale.y = inner.current.scale.z = inner.current.scale.x;
@@ -232,7 +236,7 @@ function WaxSeal() {
     if (phase !== "idle") return;
     requestGyro();
     waxPop();
-    ribbonSwish(TIMELINE.ribbonUntie);
+    ribbonSwish(TIMELINE.ribbonUntie + 0.5);
     paperRustle(1.8, TIMELINE.flapsOpen);
     startMusic();
     haptic([12, 40, 18]);
@@ -242,7 +246,7 @@ function WaxSeal() {
 
   if (gone) return null;
   return (
-    <group ref={outer} position={[0, 0, 0.115]}>
+    <group ref={outer} position={[0, Y, 0.125]}>
       <group ref={inner}>
         <mesh
           geometry={geometry}

@@ -3,7 +3,7 @@ import { INVITATION } from "@/lib/invitation.config";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: `${INVITATION.groom} & ${INVITATION.bride} — ${INVITATION.dateLabel}`,
+  title: `${INVITATION.groom} & ${INVITATION.bride} — ${INVITATION.date}`,
   description: "Приглашение на свадьбу",
 };
 

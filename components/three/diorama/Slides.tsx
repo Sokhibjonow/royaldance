@@ -1,267 +1,272 @@
 "use client";
 /**
- * The five story beats, typeset in 3D (troika SDF text) on the Z = +0.8 layer.
- * Headlines are foil-stamped (metalness 0.85 / roughness 0.2) and catch a
- * travelling "glint" light; body copy is printed ink. Slides dissolve in while
- * the depth of field racks focus from the petals back onto the text.
+ * The five text pages, typeset on <canvas> (so the browser shapes the
+ * Arabic script and joins its letters properly) and shown on planes at the
+ * Z = +0.8 layer. Each page focuses in from a 10px-style blur and blurs out
+ * again, like the reference film — the blur runs in the shader, so only the
+ * text softens while the scene behind stays crisp.
  */
-import { Text } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
 import { INVITATION, PALETTE, TIMELINE } from "@/lib/invitation.config";
 import { useInvitation } from "@/lib/store";
-import { FOIL } from "./layers";
 
-// troika parses fonts inside a blob: worker, so URLs must be absolute
-const abs = (p: string) => (typeof window === "undefined" ? p : new URL(p, window.location.href).href);
-const FONTS = {
-  script: abs("/fonts/GreatVibes.woff"),
-  serif: abs("/fonts/Cormorant.woff"),
-  italic: abs("/fonts/Cormorant-Italic.woff"),
-};
+// canvas page = the visible 9:16 page at the text plane
+const PAGE_W = 1.9;
+const PAGE_H = 3.38;
+const PX = 1100; // canvas width in px
+const PY = Math.round((PX * PAGE_H) / PAGE_W);
+const AR = '"Amiri", serif';
+const RU = '"Cormorant", Georgia, serif';
 
-type Mats = { foil: THREE.MeshPhysicalMaterial; ink: THREE.MeshStandardMaterial; soft: THREE.MeshStandardMaterial };
+type Draw = (ctx: CanvasRenderingContext2D) => void;
 
-function useSlideMaterials(): Mats {
-  return useMemo(
-    () => ({
-      foil: new THREE.MeshPhysicalMaterial({
-        color: PALETTE.foil,
-        ...FOIL,
-        envMapIntensity: 1.4,
-        transparent: true,
-        opacity: 0,
-      }),
-      ink: new THREE.MeshStandardMaterial({ color: PALETTE.ink, roughness: 0.85, transparent: true, opacity: 0 }),
-      soft: new THREE.MeshStandardMaterial({ color: "#7d6656", roughness: 0.9, transparent: true, opacity: 0 }),
-    }),
-    []
-  );
+function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, font: string, opts: { rtl?: boolean; color?: string; weight?: number; lineHeight?: number } = {}) {
+  ctx.font = `${opts.weight ?? 500} ${size}px ${font}`;
+  ctx.fillStyle = opts.color ?? PALETTE.ink;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.direction = opts.rtl ? "rtl" : "ltr";
+  s.split("\n").forEach((line, i) => ctx.fillText(line, x, y + i * size * (opts.lineHeight ?? 1.45)));
 }
 
-function Divider({ y, mats, w = 0.5 }: { y: number; mats: Mats; w?: number }) {
-  return (
-    <group position={[0, y, 0]}>
-      <mesh material={mats.foil} position={[-w / 2 - 0.03, 0, 0]}>
-        <boxGeometry args={[w, 0.004, 0.002]} />
-      </mesh>
-      <mesh material={mats.foil} position={[w / 2 + 0.03, 0, 0]}>
-        <boxGeometry args={[w, 0.004, 0.002]} />
-      </mesh>
-      <mesh material={mats.foil} rotation-z={Math.PI / 4}>
-        <boxGeometry args={[0.022, 0.022, 0.003]} />
-      </mesh>
-    </group>
-  );
+/** y as a fraction of the page height → canvas px */
+const fy = (f: number) => f * PY;
+const fx = (f: number) => f * PX;
+const I = INVITATION;
+
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.strokeStyle = PALETTE.ink;
+  ctx.lineWidth = r * 0.16;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.moveTo(x, y - r * 0.6);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x + r * 0.45, y + r * 0.3);
+  ctx.stroke();
 }
 
-function Slide({ index, children, mats }: { index: number; children: React.ReactNode; mats: Mats }) {
-  const slide = useInvitation((s) => s.slide);
-  const phase = useInvitation((s) => s.phase);
-  const group = useRef<THREE.Group>(null!);
-  const vis = useRef({ value: 0 });
-  const active = phase !== "idle" && slide === index;
+function pinIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.strokeStyle = PALETTE.ink;
+  ctx.lineWidth = r * 0.16;
+  ctx.beginPath();
+  ctx.moveTo(x, y + r * 1.1);
+  ctx.bezierCurveTo(x - r * 1.2, y - r * 0.1, x - r * 0.8, y - r * 1.2, x, y - r * 1.2);
+  ctx.bezierCurveTo(x + r * 0.8, y - r * 1.2, x + r * 1.2, y - r * 0.1, x, y + r * 1.1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.35, r * 0.35, 0, Math.PI * 2);
+  ctx.stroke();
+}
 
-  useEffect(() => {
-    gsap.killTweensOf(vis.current);
-    if (active) {
-      const delay = phase === "opening" ? TIMELINE.contentIn : 0.95;
-      gsap.to(vis.current, { value: 1, duration: 1.6, delay, ease: "power2.out" });
-    } else {
-      gsap.to(vis.current, { value: 0, duration: 0.7, ease: "power2.in" });
+/** Brushed-silver calligraphic monogram. */
+function monogram(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.font = `${size}px "Great Vibes", cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const g = ctx.createLinearGradient(x - size * 0.6, y - size * 0.5, x + size * 0.5, y + size * 0.6);
+  g.addColorStop(0, "#9b9a98");
+  g.addColorStop(0.35, "#d9d8d5");
+  g.addColorStop(0.55, "#8a8986");
+  g.addColorStop(0.8, "#c4c3bf");
+  g.addColorStop(1, "#7d7c79");
+  ctx.shadowColor = "rgba(80,70,60,0.25)";
+  ctx.shadowBlur = size * 0.03;
+  ctx.shadowOffsetY = size * 0.015;
+  ctx.fillStyle = g;
+  ctx.fillText(s, x, y);
+  ctx.restore();
+}
+
+const PAGES: Draw[] = [
+  // 1 — Bismillah
+  (ctx) => text(ctx, I.bismillah, fx(0.5), fy(0.5), 92, AR, { rtl: true, weight: 400 }),
+  // 2 — With love & gratitude
+  (ctx) => {
+    if (I.love.ar) text(ctx, I.love.ar, fx(0.55), fy(0.475), 58, AR, { rtl: true });
+    text(ctx, I.love.ru, fx(0.55), fy(0.515), 55, RU, { weight: 600 });
+  },
+  // 3 — Invitation
+  (ctx) => {
+    let y = 0.43;
+    if (I.invite.ar) {
+      text(ctx, I.invite.ar, fx(0.55), fy(y), 55, AR, { rtl: true, lineHeight: 1.25 });
+      y += 0.055 + 0.022 * I.invite.ar.split("\n").length;
     }
-  }, [active, phase]);
+    text(ctx, I.invite.ru, fx(0.55), fy(y), 46, RU, { weight: 600, lineHeight: 1.3 });
+  },
+  // 4 — Monogram, date, names, dua
+  (ctx) => {
+    monogram(ctx, I.initials, fx(0.5), fy(0.36), 330);
+    text(ctx, I.date, fx(0.5), fy(0.515), 38, RU, { weight: 600 });
+    ctx.font = `600 66px ${RU}`;
+    const gw = 70;
+    ctx.textAlign = "right";
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textBaseline = "middle";
+    ctx.fillText(I.groom, fx(0.5) - gw / 2, fy(0.555));
+    ctx.textAlign = "left";
+    ctx.fillText(I.bride, fx(0.5) + gw / 2, fy(0.555));
+    ctx.fillRect(fx(0.5) - 1, fy(0.555) - 26, 2, 52);
+    if (I.dua) text(ctx, I.dua, fx(0.5), fy(0.605), 50, AR, { rtl: true });
+  },
+  // 5 — Time & place, "your presence…"
+  (ctx) => {
+    ctx.font = `600 54px ${RU}`;
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "right";
+    ctx.fillText(I.groom, fx(0.5) - 30, fy(0.3));
+    ctx.textAlign = "left";
+    ctx.fillText(I.bride, fx(0.5) + 30, fy(0.3));
+    ctx.fillRect(fx(0.5) - 1, fy(0.3) - 20, 2, 40);
+    text(ctx, I.date, fx(0.5), fy(0.328), 35, RU, { weight: 600 });
+    clockIcon(ctx, fx(0.29), fy(0.392), 18);
+    text(ctx, I.time, fx(0.29) + 80, fy(0.392), 45, RU, { weight: 600 });
+    pinIcon(ctx, fx(0.6), fy(0.392), 18);
+    ctx.font = `600 44px ${RU}`;
+    ctx.textAlign = "left";
+    ctx.fillText(I.venue, fx(0.6) + 28, fy(0.392));
+    ctx.fillText(I.venueSub, fx(0.6) + 28, fy(0.392) + 54);
+    if (I.presence.ar) text(ctx, I.presence.ar, fx(0.5), fy(0.488), 52, AR, { rtl: true });
+    text(ctx, I.presence.ru, fx(0.5), fy(0.522), 45, RU, { weight: 600, lineHeight: 1.6 });
+  },
+];
 
-  useFrame(() => {
-    const v = vis.current.value;
-    group.current.visible = v > 0.001;
-    mats.foil.opacity = v;
-    mats.ink.opacity = v;
-    mats.soft.opacity = v * 0.9;
-    // drifts up into place and "breathes in" from slight depth
-    group.current.position.y = (1 - v) * -0.05;
-    group.current.position.z = (1 - v) * -0.08;
-    const s = 0.97 + v * 0.03;
-    group.current.scale.set(s, s, s);
-  });
+const vertexShader = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
 
-  return <group ref={group}>{children}</group>;
-}
+/** 24-tap golden-angle disc blur on a premultiplied texture. */
+const fragmentShader = /* glsl */ `
+  uniform sampler2D map;
+  uniform float uBlur;
+  uniform float uOpacity;
+  uniform vec2 uAspect;
+  varying vec2 vUv;
+  void main() {
+    vec4 acc = texture2D(map, vUv);
+    if (uBlur > 0.0005) {
+      acc = vec4(0.0);
+      for (int i = 0; i < 24; i++) {
+        float fi = float(i);
+        float r = sqrt((fi + 0.5) / 24.0) * uBlur;
+        float a = fi * 2.39996;
+        acc += texture2D(map, vUv + vec2(cos(a), sin(a)) * r * uAspect);
+      }
+      acc /= 24.0;
+    }
+    gl_FragColor = acc * uOpacity;
+    #include <colorspace_fragment>
+  }
+`;
 
-/**
- * Arabic calligraphy needs contextual letter joining, which troika's SDF
- * typesetter does not do for every font. The browser's own text shaper does,
- * so we set the line on a canvas and use it as the alpha (and bump) of a
- * foil plane — it still catches the light like real hot-foil stamping.
- */
-function ArabicFoil({
-  text,
-  height,
-  position,
-  material,
-}: {
-  text: string;
-  height: number;
-  position: [number, number, number];
-  material: THREE.MeshPhysicalMaterial;
-}) {
-  const [aspect, setAspect] = useState(4);
-  const mat = useMemo(() => material.clone(), [material]);
+function usePageTexture(draw: Draw) {
+  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null);
   useEffect(() => {
     let alive = true;
-    document.fonts.load('140px "Amiri"', text).finally(() => {
-      if (!alive) return;
-      const H = 256;
-      const c = document.createElement("canvas");
-      const ctx = c.getContext("2d")!;
-      ctx.font = `${H * 0.55}px "Amiri", serif`;
-      const w = Math.ceil(ctx.measureText(text).width + H * 0.4);
-      c.width = w;
-      c.height = H;
-      ctx.font = `${H * 0.55}px "Amiri", serif`;
-      ctx.direction = "rtl";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#fff";
-      ctx.fillText(text, w / 2, H * 0.55);
-      const tex = new THREE.CanvasTexture(c);
-      tex.anisotropy = 8;
-      mat.alphaMap = tex;
-      mat.bumpMap = tex;
-      mat.bumpScale = 2;
-      mat.alphaTest = 0.02;
-      mat.needsUpdate = true;
-      setAspect(w / H);
-    });
+    Promise.all([
+      document.fonts.load(`74px "Amiri"`, "بسم"),
+      document.fonts.load(`600 40px "Cormorant"`, "Аа"),
+      document.fonts.load(`80px "Great Vibes"`, "AM"),
+    ])
+      .catch(() => {})
+      .finally(() => {
+        if (!alive) return;
+        const c = document.createElement("canvas");
+        c.width = PX;
+        c.height = PY;
+        draw(c.getContext("2d")!);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.premultiplyAlpha = true;
+        t.anisotropy = 8;
+        setTex(t);
+      });
     return () => {
       alive = false;
     };
-  }, [text, mat]);
+  }, [draw]);
+  return tex;
+}
+
+function Page({ index, draw, onClick }: { index: number; draw: Draw; onClick?: () => void }) {
+  const slide = useInvitation((s) => s.slide);
+  const phase = useInvitation((s) => s.phase);
+  const tex = usePageTexture(draw);
+  const mesh = useRef<THREE.Mesh>(null!);
+  const state = useRef({ opacity: 0, blur: 0.02 });
+  const active = phase !== "idle" && slide === index;
+
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          map: { value: null },
+          uBlur: { value: 0.02 },
+          uOpacity: { value: 0 },
+          uAspect: { value: new THREE.Vector2(1, PX / PY) },
+        },
+        vertexShader,
+        fragmentShader,
+        transparent: true,
+        premultipliedAlpha: true,
+        depthWrite: false,
+      }),
+    []
+  );
+
+  useEffect(() => {
+    material.uniforms.map.value = tex;
+  }, [tex, material]);
+
+  useEffect(() => {
+    const s = state.current;
+    gsap.killTweensOf(s);
+    if (active) {
+      // first page waits for the doors; later pages wait for the previous one to blur away
+      const delay = phase === "opening" ? TIMELINE.contentIn - 0.4 : index === 1 ? 1.1 : 0.75;
+      gsap.fromTo(s, { blur: 0.022, opacity: 0 }, { blur: 0, opacity: 1, duration: 1.3, delay, ease: "power2.out" });
+    } else if (s.opacity > 0) {
+      gsap.to(s, { blur: 0.02, opacity: 0, duration: 0.75, ease: "power1.in" });
+    }
+  }, [active, phase, index]);
+
   useFrame(() => {
-    mat.opacity = material.opacity;
+    const s = state.current;
+    material.uniforms.uBlur.value = s.blur;
+    material.uniforms.uOpacity.value = s.opacity;
+    mesh.current.visible = s.opacity > 0.002 && !!tex;
   });
+
   return (
-    <mesh position={position} material={mat}>
-      <planeGeometry args={[height * aspect, height]} />
+    <mesh
+      ref={mesh}
+      material={material}
+      onClick={active && onClick ? onClick : undefined}
+      onPointerOver={() => active && onClick && (document.body.style.cursor = "pointer")}
+      onPointerOut={() => (document.body.style.cursor = "")}
+      raycast={active && onClick ? THREE.Mesh.prototype.raycast : () => null}
+    >
+      <planeGeometry args={[PAGE_W, PAGE_H]} />
     </mesh>
   );
 }
 
-/** Point light that sweeps across the foil when a slide focuses in. */
-function Glint() {
-  const slide = useInvitation((s) => s.slide);
-  const phase = useInvitation((s) => s.phase);
-  const light = useRef<THREE.PointLight>(null!);
-  useEffect(() => {
-    if (phase === "idle") return;
-    const l = light.current;
-    const delay = phase === "opening" ? TIMELINE.contentIn + 0.4 : 1.4;
-    const tl = gsap.timeline({ delay });
-    tl.set(l.position, { x: -1.2 })
-      .to(l, { intensity: 0.55, duration: 0.4 }, 0)
-      .to(l.position, { x: 1.2, duration: 1.8, ease: "sine.inOut" }, 0)
-      .to(l, { intensity: 0, duration: 0.5 }, 1.3);
-    return () => {
-      tl.kill();
-    };
-  }, [slide, phase]);
-  const y = [0.35, 0.3, -0.05, -0.4, 0.4][slide];
-  return <pointLight ref={light} position={[-1.2, y, 0.45]} intensity={0} distance={1.6} decay={1.2} color="#fff2d6" />;
-}
-
 export function Slides() {
-  const m = [useSlideMaterials(), useSlideMaterials(), useSlideMaterials(), useSlideMaterials(), useSlideMaterials()];
-  const I = INVITATION;
-  const common = { anchorX: "center" as const, anchorY: "middle" as const, textAlign: "center" as const };
-
+  const openMap = () => window.open(`https://maps.google.com/?q=${encodeURIComponent(I.mapQuery)}`, "_blank", "noopener");
   return (
     <group>
-      <Glint />
-      {/* 1 — Bismillah */}
-      <Slide index={0} mats={m[0]}>
-        <ArabicFoil text={I.bismillah} height={0.3} position={[0, 0.42, 0]} material={m[0].foil} />
-        <Divider y={0.18} mats={m[0]} w={0.32} />
-        <Text {...common} font={FONTS.italic} fontSize={0.068} maxWidth={1.25} lineHeight={1.25} position={[0, 0.02, 0]} material={m[0].soft}>
-          {I.bismillahTranslation}
-        </Text>
-      </Slide>
-
-      {/* 2 — Invitation */}
-      <Slide index={1} mats={m[1]}>
-        <Text {...common} font={FONTS.script} fontSize={0.2} position={[0, 0.58, 0]} material={m[1].foil}>
-          {I.invitationTitle}
-        </Text>
-        <Text {...common} font={FONTS.serif} fontSize={0.07} maxWidth={1.3} lineHeight={1.4} position={[0, 0.2, 0]} material={m[1].ink}>
-          {I.invitationText}
-        </Text>
-        <Divider y={-0.08} mats={m[1]} w={0.3} />
-        <Text {...common} font={FONTS.italic} fontSize={0.058} maxWidth={1.3} position={[0, -0.2, 0]} material={m[1].soft}>
-          {I.signature}
-        </Text>
-      </Slide>
-
-      {/* 3 — Monogram, names & date */}
-      <Slide index={2} mats={m[2]}>
-        <group position={[0, 0.48, 0]}>
-          <mesh material={m[2].foil}>
-            <torusGeometry args={[0.2, 0.004, 8, 96]} />
-          </mesh>
-          <mesh material={m[2].foil}>
-            <torusGeometry args={[0.18, 0.0018, 6, 96]} />
-          </mesh>
-          <Text {...common} font={FONTS.script} fontSize={0.15} position={[0, 0.0, 0.002]} material={m[2].foil}>
-            {I.monogram}
-          </Text>
-        </group>
-        <Text {...common} font={FONTS.script} fontSize={0.24} position={[0, 0.1, 0]} material={m[2].foil}>
-          {I.groom}
-        </Text>
-        <Text {...common} font={FONTS.italic} fontSize={0.09} position={[0, -0.07, 0]} material={m[2].soft}>
-          и
-        </Text>
-        <Text {...common} font={FONTS.script} fontSize={0.24} position={[0, -0.24, 0]} material={m[2].foil}>
-          {I.bride}
-        </Text>
-        <Divider y={-0.45} mats={m[2]} w={0.26} />
-        <Text {...common} font={FONTS.serif} fontSize={0.1} letterSpacing={0.12} position={[0, -0.58, 0]} material={m[2].foil}>
-          {I.dateLabel}
-        </Text>
-      </Slide>
-
-      {/* 4 — Time & place (camera tilts down toward the fountain) */}
-      <Slide index={3} mats={m[3]}>
-        <Text {...common} font={FONTS.script} fontSize={0.17} position={[0, 0.02, 0]} material={m[3].foil}>
-          Время и место
-        </Text>
-        <Text {...common} font={FONTS.italic} fontSize={0.064} position={[0, -0.15, 0]} material={m[3].soft}>
-          {I.dateLong}
-        </Text>
-        <Text {...common} font={FONTS.serif} fontSize={0.14} letterSpacing={0.06} position={[0, -0.3, 0]} material={m[3].foil}>
-          {I.time}
-        </Text>
-        <Text {...common} font={FONTS.serif} fontSize={0.072} maxWidth={1.3} position={[0, -0.46, 0]} material={m[3].ink}>
-          {I.venue}
-        </Text>
-        <Text {...common} font={FONTS.italic} fontSize={0.058} maxWidth={1.3} position={[0, -0.56, 0]} material={m[3].soft}>
-          {I.address}
-        </Text>
-      </Slide>
-
-      {/* 5 — Finale */}
-      <Slide index={4} mats={m[4]}>
-        <Text {...common} font={FONTS.script} fontSize={0.24} position={[0, 0.38, 0]} material={m[4].foil}>
-          Ждём вас!
-        </Text>
-        <Text {...common} font={FONTS.italic} fontSize={0.064} maxWidth={1.3} lineHeight={1.35} position={[0, 0.12, 0]} material={m[4].soft}>
-          {I.finaleText}
-        </Text>
-        <Divider y={-0.1} mats={m[4]} w={0.26} />
-        <Text {...common} font={FONTS.script} fontSize={0.15} position={[0, -0.3, 0]} material={m[4].foil}>
-          {`${I.groom} & ${I.bride}`}
-        </Text>
-      </Slide>
+      {PAGES.map((draw, i) => (
+        <Page key={i} index={i} draw={draw} onClick={i === 4 ? openMap : undefined} />
+      ))}
     </group>
   );
 }

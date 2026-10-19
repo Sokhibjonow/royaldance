@@ -20,7 +20,7 @@ const HEAD = 0.7;
 
 function rippleWater(time: { value: number }) {
   const m = new THREE.MeshPhysicalMaterial({
-    color: "#cfe3e0",
+    color: "#bcd4d6",
     roughness: 0.06,
     metalness: 0,
     transparent: true,
@@ -63,7 +63,7 @@ function jets(time: { value: number }) {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uTime: time, uSize: { value: 11 } },
+    uniforms: { uTime: time, uSize: { value: 11 }, uFade: { value: 1 } },
     vertexShader: /* glsl */ `
       attribute vec4 aSeed;
       uniform float uTime;
@@ -92,11 +92,12 @@ function jets(time: { value: number }) {
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
+      uniform float uFade;
       varying float vFade;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vec3(0.9, 0.96, 1.0), a * vFade * 0.32);
+        gl_FragColor = vec4(vec3(0.9, 0.96, 1.0), a * vFade * 0.18 * uFade);
       }`,
   });
   return new THREE.Points(g, m);
@@ -113,7 +114,7 @@ export function Fountain({ position }: { position: [number, number, number] }) {
       normalScale: new THREE.Vector2(0.2, 0.2),
       roughness: 0.3,
       clearcoat: 0.4,
-      color: "#fbf7f1",
+      color: "#efe6d9",
       side: THREE.DoubleSide,
     });
     const lower = new THREE.LatheGeometry(

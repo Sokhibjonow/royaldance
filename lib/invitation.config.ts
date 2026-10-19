@@ -1,51 +1,63 @@
 /**
  * Everything that changes from wedding to wedding lives here:
  * texts, date, venue, colours, optional assets and timeline timings.
+ *
+ * Every text block is an optional Arabic line plus a Russian line,
+ * typeset like the reference: dark taupe ink on cream paper.
+ * Set an `ar` field to "" to hide the Arabic line.
  */
 export const INVITATION = {
   groom: "Азиз",
   bride: "Мадина",
-  monogram: "A & M",
-  dateLabel: "24 · 05 · 2027",
-  dateLong: "Понедельник, 24 мая 2027",
+  /** big silver monogram (two initials) */
+  initials: "AM",
+  date: "24.05.2027",
   time: "18:00",
-  venue: "Ресторан «Royal Palace»",
-  address: "г. Андижан, ул. Навои, 15",
-  // Any Google Maps query or coordinates
+  venue: "Royal Palace",
+  venueSub: "Андижан",
+  // Any Google Maps query or coordinates — tapping the venue opens it
   mapQuery: "40.7821,72.3442",
-  bismillah: "بسم الله الرحمن الرحيم",
-  bismillahTranslation: "Во имя Аллаха, Милостивого, Милосердного",
-  invitationTitle: "Дорогие гости!",
-  invitationText:
-    "С радостью в сердцах приглашаем вас разделить с нами\nсамый светлый день нашей жизни —\nдень нашей свадьбы.",
-  signature: "С любовью, семьи жениха и невесты",
-  finaleText: "Будем счастливы разделить\nэтот день вместе с вами",
+
+  bismillah: "بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+  love: { ar: "بكل الحب والامتنان،", ru: "С любовью и благодарностью" },
+  invite: {
+    ar: "ندعوكم لتشهدوا بداية فصل جديد\nمن حياتنا",
+    ru: "приглашаем вас стать свидетелями\nначала новой главы\nнашей жизни.",
+  },
+  dua: "اللهم بارك لنا وبارك علينا واجمع بيننا في خير",
+  presence: {
+    ar: "حضوركم يسعدنا ويزيد فرحنا جمالاً",
+    ru: "Ваше присутствие порадует нас и сделает\nнаш праздник ещё прекраснее.",
+  },
 } as const;
 
 export const PALETTE = {
-  paper: "#f4ecdf",
-  paperEdge: "#e9dcc6",
-  paperInner: "#f4ebdc",
-  wax: "#c4878a",
-  ribbon: "#c99c95",
-  ribbonSheen: "#fff1ea",
-  foil: "#b8966a", // champagne-bronze foil; use "#c7c9cc" for silver
-  ink: "#5a4636",
-  petal: ["#f2c7c7", "#e9a9ae", "#f6d9d4", "#dc8f99", "#fbe7e2"],
+  paper: "#f6f1e9",
+  paperEdge: "#e7ddcf",
+  paperInner: "#efe8dd",
+  wall: "#f1ede7",
+  ink: "#5c5049", // text
+  toile: "#6f6256", // pen-drawn vines on the doors
+  wax: "#c9a5a3", // dusty pink oval seal
+  ribbon: "#dccbb8", // ivory silk with frayed edges
+  ribbonSheen: "#fffaf3",
+  marble: "#efe7da",
+  petal: ["#f1cfc8", "#e8b9b3", "#f6dfd8", "#ddb0aa"],
+  leaf: ["#a7b195", "#98a387", "#b6bea6"],
 } as const;
 
 /**
  * Optional hand-painted PNG layers (transparent background) in /public/textures.
- * Every layer has a procedural 3D fallback, so the site works without any of them.
+ * Every layer has a procedural fallback, so the site works without any of them.
  */
 export const TEXTURES = {
   flapLeft: "/textures/flap-left.png",
   flapRight: "/textures/flap-right.png",
   seal: "/textures/seal.png",
   backdrop: "/textures/backdrop.png",
+  frame: "/textures/frame.png",
   columnLeft: "/textures/column-left.png",
   columnRight: "/textures/column-right.png",
-  garland: "/textures/garland.png",
   doveBody: "/textures/dove-body.png",
   doveWing: "/textures/dove-wing.png",
   fountain: "/textures/fountain.png",
@@ -57,27 +69,33 @@ export const AUDIO = {
   ribbon: "/audio/ribbon.mp3", // optional, synthesised if missing
 };
 
-/** Opening timeline (seconds from the click on the seal). */
+/** Opening timeline (seconds from the tap on the seal) — paced like the reference video. */
 export const TIMELINE = {
-  sealLift: 0, // seal pops toward camera
-  sealExit: 0.55, // flies off to the right
-  ribbonUntie: 0.5, // bow unties, tails fly apart
-  flapsOpen: 1.55, // gatefold doors swing to 130°
-  flapsDuration: 2.2,
-  cameraDolly: 2.1, // camera glides inside
-  cameraDuration: 3.2,
-  contentIn: 4.4, // first slide focuses in
+  sealLift: 0, // seal pops toward the camera
+  sealExit: 0.4, // drops away to the bottom right
+  ribbonUntie: 1.0, // bow loops widen, then slide off
+  ribbonDuration: 1.8,
+  flapsOpen: 2.7, // side doors swing open
+  flapsDuration: 1.6,
+  innerFlaps: 3.7, // top & bottom scalloped flaps fold away
+  innerDuration: 1.3,
+  linerFade: 4.4, // inner sheet dissolves into the diorama
+  cameraDolly: 2.8,
+  cameraDuration: 2.9,
+  contentIn: 5.2,
 } as const;
+
+/** Seconds each slide stays before the story moves on by itself (last one stays). */
+export const AUTOPLAY = [4.2, 4.2, 5.2, 5.2] as const;
 
 /** Scene dimensions (world units ≈ decimetres). */
 export const CARD = {
-  flapWidth: 1.05, // each door, closed they meet in the middle
+  flapWidth: 1.05, // each door; closed they meet in the middle
   height: 3.0,
-  thickness: 0.018, // ≈ 1.8 mm cotton board at this scale
-  scallopRadius: 0.075,
+  thickness: 0.018, // ≈ 1.8 mm cotton board
   openAngle: (130 * Math.PI) / 180,
   dioramaZ: -1.2, // the interior "Z = 0" plane
 } as const;
 
-export const SLIDES = ["bismillah", "invitation", "names", "venue", "finale"] as const;
+export const SLIDES = ["bismillah", "love", "invite", "monogram", "venue"] as const;
 export type SlideId = (typeof SLIDES)[number];
