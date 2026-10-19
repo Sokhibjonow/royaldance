@@ -39,7 +39,7 @@ export const PALETTE = {
   ink: "#5c5049", // text
   toile: "#6f6256", // pen-drawn vines on the doors
   wax: "#c9a5a3", // dusty pink oval seal
-  ribbon: "#dccbb8", // ivory silk with frayed edges
+  ribbon: "#d4c0a9", // ivory silk with frayed edges
   ribbonSheen: "#fffaf3",
   marble: "#efe7da",
   petal: ["#f1cfc8", "#e8b9b3", "#f6dfd8", "#ddb0aa"],

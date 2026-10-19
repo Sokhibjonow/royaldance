@@ -21,7 +21,9 @@ import DioramaInterior from "./DioramaInterior";
 import RosePetals3D from "./RosePetals3D";
 
 export default function Scene({ onReady }: { onReady?: () => void }) {
-  const [dpr, setDpr] = useState(1.5);
+  // ?render — deterministic frame-by-frame recording (scripts/render-video.mjs)
+  const recording = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("render");
+  const [dpr, setDpr] = useState(recording ? 1 : 1.5);
   const [hq, setHq] = useState(true);
   const mobile = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
@@ -29,20 +31,22 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
     <Canvas
       shadows={{ type: THREE.PCFShadowMap }}
       dpr={dpr}
-      gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
+      gl={{ antialias: false, powerPreference: "high-performance", stencil: false, preserveDrawingBuffer: recording }}
       camera={{ fov: 36, near: 0.1, far: 60, position: [0, 0, 9] }}
       onCreated={({ gl }) => {
         gl.setClearColor("#ebe5dc");
         onReady?.();
       }}
     >
-      <PerformanceMonitor
-        onIncline={() => setDpr(Math.min(2, window.devicePixelRatio))}
-        onDecline={() => {
-          setDpr(1);
-          setHq(false);
-        }}
-      />
+      {!recording && (
+        <PerformanceMonitor
+          onIncline={() => setDpr(Math.min(2, window.devicePixelRatio))}
+          onDecline={() => {
+            setDpr(1);
+            setHq(false);
+          }}
+        />
+      )}
       <fog attach="fog" args={["#ebe5dc", 9, 22]} />
       <Suspense fallback={null}>
         <Lights />
