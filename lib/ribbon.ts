@@ -10,6 +10,8 @@ export type StripDef = {
   from: THREE.Vector3[];
   /** control points (untied / flown away) */
   to: THREE.Vector3[];
+  /** optional in-between pose (e.g. loops loosening before they slip off), reached at progress 0.4 */
+  mid?: THREE.Vector3[];
   /**
    * Width direction. "project": hint projected ⟂ tangent (band across the card).
    * "cross": hint × tangent — with hint = +Z the ribbon face looks at the camera (loops, tails).
@@ -52,14 +54,18 @@ export class RibbonStrip {
 
   /** progress 0 = tied, 1 = flown away. time adds a fabric flutter. */
   update(progress: number, time: number) {
-    const { from, to, wave = 0.5, twist = 0, hint, width, mode = "project" } = this.def;
+    const { from, to, mid, wave = 0.5, twist = 0, hint, width, mode = "project" } = this.def;
     const count = from.length;
     for (let i = 0; i < count; i++) {
       const along = i / (count - 1);
       // the end of the strip leaves first, like ribbon sliding out of a knot
       const local = THREE.MathUtils.clamp((progress * (1 + wave) - (1 - along) * wave) / 1, 0, 1);
       const e = local * local * (3 - 2 * local);
-      this.pts[i].lerpVectors(from[i], to[i], e);
+      if (mid) {
+        const k = 0.4;
+        if (e < k) this.pts[i].lerpVectors(from[i], mid[i], e / k);
+        else this.pts[i].lerpVectors(mid[i], to[i], (e - k) / (1 - k));
+      } else this.pts[i].lerpVectors(from[i], to[i], e);
       const flutter = Math.sin(time * 9 + along * 7) * 0.02 * Math.sin(e * Math.PI);
       this.pts[i].z += flutter;
       this.pts[i].y += flutter * 0.6;

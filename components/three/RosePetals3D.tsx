@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { PALETTE } from "@/lib/invitation.config";
 import { input, useInvitation } from "@/lib/store";
 import { rig } from "@/lib/rig";
-import { makePetal, mulberry32 } from "@/lib/textures";
+import { makeLeaf, makePetal, mulberry32 } from "@/lib/textures";
 
 type Petal = {
   p: THREE.Vector3;
@@ -39,7 +39,7 @@ function petalGeometry() {
   return g;
 }
 
-export default function RosePetals3D({ count = 150 }: { count?: number }) {
+export default function RosePetals3D({ count = 80, leaves = false }: { count?: number; leaves?: boolean }) {
   const mesh = useRef<THREE.InstancedMesh>(null!);
   const phase = useInvitation((s) => s.phase);
   const { camera } = useThree();
@@ -47,28 +47,28 @@ export default function RosePetals3D({ count = 150 }: { count?: number }) {
   const mat = useMemo(
     () =>
       new THREE.MeshPhysicalMaterial({
-        map: makePetal(),
+        map: leaves ? makeLeaf() : makePetal(),
         alphaTest: 0.45,
         side: THREE.DoubleSide,
         roughness: 0.55,
         sheen: 1,
         sheenRoughness: 0.4,
-        sheenColor: new THREE.Color("#ffe4e4"),
+        sheenColor: new THREE.Color(leaves ? "#eef2e4" : "#ffe4e4"),
         // velvety petals let some light through
         transmission: 0,
         thickness: 0.05,
       }),
-    []
+    [leaves]
   );
 
   const petals = useMemo<Petal[]>(() => {
-    const rnd = mulberry32(2024);
+    const rnd = mulberry32(leaves ? 99 : 2024);
     return Array.from({ length: count }, () => ({
       p: new THREE.Vector3((rnd() - 0.5) * 5, (rnd() - 0.5) * 6, -0.9 + rnd() * 2.6),
       v: new THREE.Vector3(0, -0.1, 0),
       rot: new THREE.Euler(rnd() * 6.3, rnd() * 6.3, rnd() * 6.3),
       spin: new THREE.Vector3((rnd() - 0.5) * 3, (rnd() - 0.5) * 3, (rnd() - 0.5) * 2),
-      size: 0.045 + rnd() * 0.04,
+      size: leaves ? 0.03 + rnd() * 0.02 : 0.026 + rnd() * 0.022,
       phase: rnd() * 100,
     }));
   }, [count]);
@@ -76,7 +76,8 @@ export default function RosePetals3D({ count = 150 }: { count?: number }) {
   useLayoutEffect(() => {
     const c = new THREE.Color();
     petals.forEach((_, i) => {
-      c.set(PALETTE.petal[i % PALETTE.petal.length]);
+      const list = leaves ? PALETTE.leaf : PALETTE.petal;
+      c.set(list[i % list.length]);
       mesh.current.setColorAt(i, c);
     });
     mesh.current.instanceColor!.needsUpdate = true;
@@ -95,8 +96,8 @@ export default function RosePetals3D({ count = 150 }: { count?: number }) {
     const gust = input.gust;
     const cy = rig.look.y;
     const camZ = camera.position.z;
-    // in idle only a light sprinkle drifts past the closed card
-    const active = phase === "idle" ? Math.floor(count * 0.35) : count;
+    // no petals on the closed card; they start drifting once it opens
+    const active = phase === "idle" ? 0 : phase === "opening" ? Math.floor(count * 0.3) : count;
 
     for (let i = 0; i < count; i++) {
       const P = petals[i];

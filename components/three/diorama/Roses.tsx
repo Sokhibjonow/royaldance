@@ -116,7 +116,7 @@ export function RoseField({ roses, leaves = [] }: { roses: RoseSpec[]; leaves?: 
   );
 }
 
-const ROSE_COLORS = ["#e9aaa6", "#f5e2cf", "#d98d93", "#f0bfa6", "#f7d6d0", "#c97a85"];
+const ROSE_COLORS = ["#f1d4cb", "#f6e6dc", "#e9c1b8", "#f3dcd0", "#e2b2aa"];
 
 /** A loose cluster of blooms + leaves around a point, for garlands. */
 export function cluster(
@@ -156,4 +156,29 @@ export function cluster(
 
 export function mergeClusters(list: { roses: RoseSpec[]; leaves: LeafSpec[] }[]) {
   return { roses: list.flatMap((c) => c.roses), leaves: list.flatMap((c) => c.leaves) };
+}
+
+/** Leafy garland with small blooms and buds along a sagging curve from a to b. */
+export function garland(
+  a: [number, number, number],
+  b: [number, number, number],
+  sag: number,
+  seed: number,
+  density = 1
+): { roses: RoseSpec[]; leaves: LeafSpec[] } {
+  const rnd = mulberry32(seed);
+  const roses: RoseSpec[] = [];
+  const leaves: LeafSpec[] = [];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const n = Math.max(6, Math.round((len / 0.03) * density));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = a[0] + (b[0] - a[0]) * t;
+    const y = a[1] + (b[1] - a[1]) * t - Math.sin(t * Math.PI) * sag;
+    const z = a[2] + (b[2] - a[2]) * t;
+    const ang = Math.atan2(b[1] - a[1] - Math.cos(t * Math.PI) * Math.PI * sag, b[0] - a[0]);
+    leaves.push({ p: [x, y, z], s: 0.045 + rnd() * 0.03, rot: ang + (i % 2 ? 1 : -1) * (0.9 + rnd() * 0.6) - Math.PI / 2, tiltX: 0.35 });
+    if (i % 4 === 2) roses.push({ p: [x, y, z + 0.015], s: 0.028 + rnd() * 0.018, color: ROSE_COLORS[i % ROSE_COLORS.length] });
+  }
+  return { roses, leaves };
 }

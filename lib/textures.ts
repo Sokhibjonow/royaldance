@@ -158,16 +158,7 @@ function paperHeight(w: number, h: number, seed: number, scale = 1) {
   return out;
 }
 
-// ------------------------------------------------------- foil ornament ----
 type Ornament = (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
-
-function scroll(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, flip = 1) {
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.bezierCurveTo(x + 40 * s * flip, y - 10 * s, x + 60 * s * flip, y - 50 * s, x + 30 * s * flip, y - 60 * s);
-  ctx.bezierCurveTo(x + 10 * s * flip, y - 66 * s, x + 4 * s * flip, y - 44 * s, x + 20 * s * flip, y - 40 * s);
-  ctx.stroke();
-}
 
 function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, ang: number) {
   ctx.save();
@@ -180,54 +171,6 @@ function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, 
   ctx.fill();
   ctx.restore();
 }
-
-function sprig(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, ang: number, s: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(ang);
-  ctx.lineWidth = 2.2 * s;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(len * 0.5, -len * 0.12, len, 0);
-  ctx.stroke();
-  for (let i = 1; i < 7; i++) {
-    const t = i / 7;
-    const lx = len * t;
-    const ly = -Math.sin(t * Math.PI) * len * 0.06;
-    leaf(ctx, lx, ly, 26 * s * (1 - t * 0.5), -0.7);
-    leaf(ctx, lx, ly, 22 * s * (1 - t * 0.5), 0.75);
-  }
-  ctx.restore();
-}
-
-/** Classic flap ornament: double border following the scallops, corner scrolls, botanical sprigs. */
-export const flapOrnament =
-  (side: "left" | "right", scallopFrac: number): Ornament =>
-  (ctx, w, h) => {
-    const s = w / 512;
-    ctx.save();
-    if (side === "right") {
-      ctx.translate(w, 0);
-      ctx.scale(-1, 1);
-    }
-    // Layout below is drawn for the LEFT flap: hinge at x=0, scallops at x=w
-    const inner = w * (1 - scallopFrac) - 34 * s;
-    const m = 34 * s;
-    ctx.lineWidth = 3.2 * s;
-    ctx.strokeRect(m, m, inner - m, h - 2 * m);
-    ctx.lineWidth = 1.4 * s;
-    ctx.strokeRect(m + 12 * s, m + 12 * s, inner - m - 24 * s, h - 2 * m - 24 * s);
-    ctx.lineWidth = 2.2 * s;
-    scroll(ctx, m + 12 * s, m + 80 * s, s * 1.2, 1);
-    scroll(ctx, m + 12 * s, h - m - 20 * s, s * 1.2, 1);
-    sprig(ctx, m + 40 * s, h * 0.5, inner * 0.62, -0.95, s);
-    sprig(ctx, m + 40 * s, h * 0.5, inner * 0.62, 0.95, s);
-    // small rosette
-    ctx.beginPath();
-    ctx.arc(m + 40 * s, h * 0.5, 9 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  };
 
 export type PaperSet = {
   map: THREE.Texture;
@@ -306,74 +249,6 @@ export function makePaper(opts: {
   };
 }
 
-// ------------------------------------------------------------------ wax ----
-/** Embossed rose for the wax seal; returns bump/normal + subtle colour mottling. */
-export function makeWaxSeal(color: string) {
-  const S = 512;
-  const { ctx } = canvas(S, S);
-  ctx.translate(S / 2, S / 2);
-  ctx.fillStyle = "#000";
-  ctx.strokeStyle = "#000";
-  ctx.lineCap = "round";
-  // stamp rim
-  ctx.lineWidth = 14;
-  ctx.beginPath();
-  ctx.arc(0, 0, S * 0.36, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(0, 0, S * 0.32, 0, Math.PI * 2);
-  ctx.stroke();
-  // rose: spiral petals
-  for (let ring = 0; ring < 4; ring++) {
-    const n = 5 + ring;
-    const r = 26 + ring * 22;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + ring * 0.6;
-      ctx.save();
-      ctx.rotate(a);
-      ctx.lineWidth = 7 - ring;
-      ctx.beginPath();
-      ctx.arc(0, -r * 0.55, r * 0.62, Math.PI * 0.15, Math.PI * 0.85);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-  ctx.beginPath();
-  ctx.arc(0, 0, 14, 0, Math.PI * 2);
-  ctx.fill();
-  // leaves around
-  for (let i = 0; i < 8; i++) {
-    ctx.save();
-    ctx.rotate((i / 8) * Math.PI * 2 + 0.2);
-    leaf(ctx, S * 0.2, 0, 44, 0.3);
-    ctx.restore();
-  }
-  const mask = readAlpha(ctx, S, S);
-  const soft = boxBlur(mask, S, S, 3);
-  const h = new Float32Array(S * S);
-  const colC = canvas(S, S);
-  const img = colC.ctx.createImageData(S, S);
-  const base = new THREE.Color(color);
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const i = y * S + x;
-      const n = fbm(x / 60, y / 60, 3, 7);
-      h[i] = soft[i] * 1.0 + n * 0.25;
-      const shade = 0.9 + n * 0.18 - soft[i] * 0.08;
-      img.data[i * 4] = Math.min(255, base.r * shade * 255);
-      img.data[i * 4 + 1] = Math.min(255, base.g * shade * 255);
-      img.data[i * 4 + 2] = Math.min(255, base.b * shade * 255);
-      img.data[i * 4 + 3] = 255;
-    }
-  }
-  colC.ctx.putImageData(img, 0, 0);
-  return {
-    map: toTexture(colC.c, true),
-    normalMap: toTexture(heightToNormal(h, S, S, 7), false),
-  };
-}
-
 // --------------------------------------------------------------- marble ----
 export function makeMarble(seed = 11) {
   const W = 256;
@@ -401,34 +276,6 @@ export function makeMarble(seed = 11) {
   const map = toTexture(c, true, true);
   const normalMap = toTexture(heightToNormal(hgt, W, H, 1.2, true), false, true);
   return { map, normalMap };
-}
-
-// ---------------------------------------------------------------- linen ----
-export function makeLinen(color: string) {
-  const S = 512;
-  const { c, ctx } = canvas(S, S);
-  const img = ctx.createImageData(S, S);
-  const hgt = new Float32Array(S * S);
-  const base = new THREE.Color(color);
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const weave = Math.sin(x * 1.3) * 0.5 + Math.sin(y * 1.3) * 0.5;
-      const slub = fbm(x / 6, y / 90, 2, 5) * 0.6 + fbm(x / 90, y / 6, 2, 9) * 0.6;
-      const v = weave * 0.04 + slub;
-      const i = y * S + x;
-      hgt[i] = v;
-      const shade = 0.9 + v * 0.1;
-      img.data[i * 4] = Math.min(255, base.r * shade * 255);
-      img.data[i * 4 + 1] = Math.min(255, base.g * shade * 255);
-      img.data[i * 4 + 2] = Math.min(255, base.b * shade * 255);
-      img.data[i * 4 + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  return {
-    map: toTexture(c, true, true),
-    normalMap: toTexture(heightToNormal(hgt, S, S, 1.5, true), false, true),
-  };
 }
 
 // ----------------------------------------------------------------- gobo ----
@@ -589,4 +436,15 @@ export function makeLeaf() {
   ctx.lineTo(0, -S * 0.95);
   ctx.stroke();
   return toTexture(c, true);
+}
+
+/** Height map drawn on a canvas (luma, white = raised) → tangent-space normal map. */
+export function normalFromCanvas(src: HTMLCanvasElement, strength = 4, blur = 2) {
+  const w = src.width;
+  const h = src.height;
+  const d = src.getContext("2d")!.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) lum[i] = d[i * 4] / 255;
+  const soft = blur > 0 ? boxBlur(lum, w, h, blur) : lum;
+  return toTexture(heightToNormal(soft, w, h, strength), false);
 }

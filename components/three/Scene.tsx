@@ -32,7 +32,7 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
       gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
       camera={{ fov: 36, near: 0.1, far: 60, position: [0, 0, 9] }}
       onCreated={({ gl }) => {
-        gl.setClearColor("#e9dfcf");
+        gl.setClearColor("#ebe5dc");
         onReady?.();
       }}
     >
@@ -43,15 +43,15 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
           setHq(false);
         }}
       />
-      <fog attach="fog" args={["#e9dfcf", 9, 22]} />
+      <fog attach="fog" args={["#ebe5dc", 9, 22]} />
       <Suspense fallback={null}>
         <Lights />
         <Environment resolution={256} frames={1} environmentIntensity={0.55}>
           {/* studio light cards: give the foil, wax and silk something to reflect */}
-          <Lightformer form="rect" intensity={2.2} color="#fff4e2" position={[-3, 3, 4]} scale={[5, 3, 1]} />
-          <Lightformer form="rect" intensity={1.2} color="#ffe6d6" position={[4, 0, 3]} scale={[3, 5, 1]} />
+          <Lightformer form="rect" intensity={2.2} color="#ffffff" position={[-3, 3, 4]} scale={[5, 3, 1]} />
+          <Lightformer form="rect" intensity={1.2} color="#fbf8f4" position={[4, 0, 3]} scale={[3, 5, 1]} />
           <Lightformer form="ring" intensity={1.6} color="#ffffff" position={[0, 4, -2]} scale={2} />
-          <Lightformer form="rect" intensity={0.5} color="#d9c8b5" position={[0, -4, 2]} scale={[8, 2, 1]} />
+          <Lightformer form="rect" intensity={0.5} color="#e6e2dc" position={[0, -4, 2]} scale={[8, 2, 1]} />
         </Environment>
         <CameraRig />
         <TiltGroup>
@@ -59,7 +59,8 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
           <GatefoldEnvelope />
           <WaxSealAndRibbon />
         </TiltGroup>
-        <RosePetals3D count={mobile ? 70 : 150} />
+        <RosePetals3D count={mobile ? 45 : 80} />
+        <RosePetals3D count={mobile ? 25 : 45} leaves />
         <Effects hq={hq && !mobile} />
       </Suspense>
     </Canvas>
@@ -83,7 +84,7 @@ function Lights() {
   // warm light pours into the card as the doors open
   useEffect(() => {
     if (phase === "idle") return;
-    gsap.to(inner.current, { intensity: 1.1, duration: 2.6, delay: TIMELINE.flapsOpen + 0.3, ease: "sine.inOut" });
+    gsap.to(inner.current, { intensity: 0.6, duration: 2.6, delay: TIMELINE.flapsOpen + 0.3, ease: "sine.inOut" });
   }, [phase]);
 
   useFrame(({ clock }) => {
@@ -96,15 +97,16 @@ function Lights() {
 
   return (
     <>
-      <ambientLight intensity={0.12} color="#ffe9d2" />
-      <hemisphereLight args={["#fff6ea", "#b59c80", 0.35]} />
+      <ambientLight intensity={0.75} color="#ffffff" />
+      <hemisphereLight args={["#ffffff", "#ebe7e2", 0.6]} />
       {/* key light — main soft shadows (seal → ribbon, doors → interior) */}
       <directionalLight
         ref={key}
         castShadow
-        position={[-2.6, 3.4, 5.5]}
-        intensity={1.9}
-        color="#fff1df"
+        position={[-1.2, 2.2, 6]}
+        intensity={1.25}
+        color="#ffffff"
+        shadow-intensity={0.45}
         shadow-mapSize={[2048, 2048]}
         shadow-radius={7}
         shadow-bias={-0.0004}
@@ -125,13 +127,14 @@ function Lights() {
         angle={0.55}
         penumbra={0.7}
         decay={0}
-        intensity={1.7}
-        color="#ffe9d2"
+        intensity={0.55}
+        color="#fff8f0"
+        shadow-intensity={0.3}
         shadow-mapSize={[1024, 1024]}
         shadow-radius={5}
         shadow-bias={-0.0005}
       />
-      <pointLight ref={inner} position={[0, 0.6, -0.1]} intensity={0} distance={4} decay={1.6} color="#ffc98f" />
+      <pointLight ref={inner} position={[0, 0.6, -0.1]} intensity={0} distance={4} decay={1.6} color="#ffe4c8" />
     </>
   );
 }
@@ -144,32 +147,25 @@ function CameraRig() {
   const tween = useRef<gsap.core.Timeline | null>(null);
   const smoothed = useRef(new THREE.Vector3(0, 0, 9));
 
-  const goTo = (p: Pose, duration: number, delay: number, ease: string, rackFocus: boolean) => {
+  const goTo = (p: Pose, duration: number, delay: number, ease: string) => {
     tween.current?.kill();
     const tl = gsap.timeline({ delay });
     tl.to(rig.look, { x: p.look[0], y: p.look[1], z: p.look[2], duration, ease }, 0);
     tl.to(rig, { halfW: p.halfW, halfH: p.halfH, duration, ease }, 0);
-    if (rackFocus) {
-      // pull focus to the petals near the lens, then rack back onto the text
-      tl.to(rig.focus, { z: 1.4, y: p.look[1], duration: duration * 0.35, ease: "sine.in" }, 0);
-      tl.to(rig.focus, { z: p.focusZ, duration: duration * 0.75, ease: "power2.out" }, duration * 0.45);
-    } else {
-      tl.to(rig.focus, { y: p.look[1], z: p.focusZ, duration, ease }, 0);
-    }
+    tl.to(rig.focus, { y: p.look[1], z: p.focusZ, duration, ease }, 0);
     tween.current = tl;
   };
 
   useEffect(() => {
     if (phase === "opening") {
       // Dolly in: glide through the open doors into the diorama
-      goTo(POSES.slides[0], TIMELINE.cameraDuration, TIMELINE.cameraDolly, "power2.inOut", false);
+      goTo(POSES.slides[0], TIMELINE.cameraDuration, TIMELINE.cameraDolly, "power2.inOut");
       gsap.to(rig, { interior: 1, duration: TIMELINE.cameraDuration, delay: TIMELINE.cameraDolly });
-      gsap.fromTo(rig.focus, { z: 1.5 }, { z: -0.4, duration: 1.8, delay: TIMELINE.contentIn - 0.6, ease: "power2.out" });
     }
   }, [phase]);
 
   useEffect(() => {
-    if (phase === "open") goTo(POSES.slides[slide], 2.2, 0, "power3.inOut", true);
+    if (phase === "open") goTo(POSES.slides[slide], 2.4, 0, "sine.inOut");
   }, [slide, phase]);
 
   useFrame(({ clock }, dt) => {
@@ -189,8 +185,8 @@ function CameraRig() {
     const by = Math.sin(t * 0.23 + 1.3) * 0.04 * breathe;
     const bz = Math.sin(t * 0.17) * 0.06;
     // inside the card the camera itself parallaxes across the layers
-    const px = input.tx * 0.22 * rig.interior;
-    const py = input.ty * 0.16 * rig.interior;
+    const px = input.tx * 0.12 * rig.interior;
+    const py = input.ty * 0.09 * rig.interior;
     const target = new THREE.Vector3(rig.look.x + bx + px, rig.look.y + by + py, rig.look.z + dist + bz);
     easing.damp3(smoothed.current, target, 0.25, dt);
     cam.position.copy(smoothed.current);
@@ -257,10 +253,10 @@ function Effects({ hq }: { hq: boolean }) {
   });
   return (
     <EffectComposer multisampling={hq ? 4 : 0}>
-      <DepthOfField ref={dof} worldFocusRange={0.9} bokehScale={hq ? 4 : 2.5} />
-      <Bloom mipmapBlur luminanceThreshold={0.9} luminanceSmoothing={0.15} intensity={0.4} radius={0.65} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      <Vignette offset={0.28} darkness={0.55} />
+      <DepthOfField ref={dof} worldFocusRange={2.2} bokehScale={hq ? 3.5 : 2.5} />
+      <Bloom mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.1} intensity={0.25} radius={0.6} />
+      <ToneMapping mode={ToneMappingMode.NEUTRAL} />
+      <Vignette offset={0.35} darkness={0.3} />
       <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.08} />
     </EffectComposer>
   );

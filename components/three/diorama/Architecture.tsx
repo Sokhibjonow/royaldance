@@ -1,77 +1,53 @@
 "use client";
 /**
- * Backdrop (ivory linen wall + inner paper sheet), the thin foil arch frame,
- * and the fluted marble columns. Each falls back to procedural geometry when
- * no painted PNG layer is provided.
+ * Backdrop wall, the painted page frame, and cream marble columns wrapped
+ * in climbing roses. Each falls back to procedural art when no painted PNG
+ * layer is provided.
  */
 import { useMemo } from "react";
 import * as THREE from "three";
 import { PALETTE, TEXTURES } from "@/lib/invitation.config";
-import { makeLinen, makeMarble, makePaper } from "@/lib/textures";
+import { makeMarble, makePaper } from "@/lib/textures";
+import { canvasTexture, drawFrame } from "@/lib/illustrations";
 import { useOptionalTexture } from "@/lib/assets";
-import { ARCH, FOIL } from "./layers";
+import { RoseField, type LeafSpec, type RoseSpec } from "./Roses";
+import { mulberry32 } from "@/lib/textures";
 
 // ------------------------------------------------------------ backdrop ----
 export function Backdrop() {
-  const linen = useMemo(() => {
-    const t = makeLinen("#ebe3d7");
-    t.map.repeat.set(7, 5);
-    t.normalMap.repeat.set(7, 5);
-    return t;
+  const paper = useMemo(() => {
+    const p = makePaper({ width: 1024, height: 1024, paper: PALETTE.wall, seed: 21 });
+    for (const t of [p.map, p.normalMap, p.roughnessMap]) {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(4, 3);
+    }
+    return p;
   }, []);
-  const sheet = useMemo(() => makePaper({ width: 512, height: 732, paper: PALETTE.paperInner, seed: 21 }), []);
   const painted = useOptionalTexture(TEXTURES.backdrop);
   return (
-    <group>
-      <mesh receiveShadow position={[0, 0, -0.02]}>
-        <planeGeometry args={[16, 11]} />
-        <meshStandardMaterial map={linen.map} normalMap={linen.normalMap} normalScale={[0.25, 0.25]} roughness={0.95} />
-      </mesh>
-      {/* the inner sheet of the invitation */}
-      <mesh receiveShadow castShadow position={[0, -0.05, 0]}>
-        <boxGeometry args={[2.06, 2.96, 0.012]} />
-        <meshStandardMaterial
-          map={painted ?? sheet.map}
-          normalMap={sheet.normalMap}
-          normalScale={[0.5, 0.5]}
-          roughnessMap={sheet.roughnessMap}
-          roughness={1}
-        />
-      </mesh>
-    </group>
+    <mesh receiveShadow position={[0, 0, -0.02]}>
+      <planeGeometry args={[16, 11]} />
+      <meshStandardMaterial
+        map={painted ?? paper.map}
+        normalMap={paper.normalMap}
+        normalScale={[0.3, 0.3]}
+        roughnessMap={paper.roughnessMap}
+        roughness={1}
+      />
+    </mesh>
   );
 }
 
-// --------------------------------------------------------------- frame ----
-function archPath(inset: number) {
-  const hw = ARCH.halfW - inset;
-  const pts: THREE.Vector3[] = [];
-  pts.push(new THREE.Vector3(-hw, ARCH.bottom + inset, 0));
-  pts.push(new THREE.Vector3(-hw, ARCH.springY, 0));
-  const n = 40;
-  for (let i = 1; i < n; i++) {
-    const a = Math.PI - (i / n) * Math.PI;
-    pts.push(new THREE.Vector3(Math.cos(a) * hw, ARCH.springY + Math.sin(a) * (ARCH.rise - inset), 0));
-  }
-  pts.push(new THREE.Vector3(hw, ARCH.springY, 0));
-  pts.push(new THREE.Vector3(hw, ARCH.bottom + inset, 0));
-  return new THREE.CatmullRomCurve3(pts, true, "catmullrom", 0.02);
-}
-
-export function ArchFrame() {
-  const [outer, inner] = useMemo(
-    () => [new THREE.TubeGeometry(archPath(0), 400, 0.009, 8, true), new THREE.TubeGeometry(archPath(0.045), 400, 0.0045, 6, true)],
-    []
-  );
-  const foil = useMemo(
-    () => new THREE.MeshPhysicalMaterial({ color: PALETTE.foil, ...FOIL, clearcoat: 0.4, envMapIntensity: 1.4 }),
-    []
-  );
+// --------------------------------------------------------- page frame ----
+/** Watercolour rose frame. `lush` = fuller version used from the monogram page on. */
+export function PaintedFrame({ width, height, lush }: { width: number; height: number; lush: boolean }) {
+  const painted = useOptionalTexture(TEXTURES.frame);
+  const map = useMemo(() => canvasTexture(drawFrame(lush)), [lush]);
   return (
-    <group>
-      <mesh geometry={outer} material={foil} castShadow />
-      <mesh geometry={inner} material={foil} castShadow />
-    </group>
+    <mesh receiveShadow raycast={() => null}>
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial map={painted ?? map} transparent alphaTest={0.02} roughness={0.95} depthWrite={false} />
+    </mesh>
   );
 }
 
@@ -87,7 +63,7 @@ function flutedShaft(h: number, rBottom: number, rTop: number) {
     const r = Math.hypot(x, z);
     // 20 concave flutes + gentle entasis
     const flute = Math.pow(Math.max(0, Math.cos(a * 10)), 0.6);
-    const entasis = 1 + 0.035 * Math.sin(((y / h) + 0.5) * Math.PI);
+    const entasis = 1 + 0.035 * Math.sin((y / h + 0.5) * Math.PI);
     const nr = r * entasis * (1 - 0.055 * flute);
     p.setX(i, Math.cos(a) * nr);
     p.setZ(i, Math.sin(a) * nr);
@@ -97,14 +73,16 @@ function flutedShaft(h: number, rBottom: number, rTop: number) {
 }
 
 function lathe(profile: [number, number][], segs = 64) {
-  return new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), segs);
+  return new THREE.LatheGeometry(
+    profile.map(([r, y]) => new THREE.Vector2(r, y)),
+    segs
+  );
 }
 
-export const COLUMN = { height: 2.72, bottom: -1.47 };
+type ColumnProps = { height: number; bottom: number };
 
-function ProceduralColumn({ marble }: { marble: THREE.Material }) {
-  const H = COLUMN.height;
-  const shaftH = H - 0.42;
+function ProceduralColumn({ marble, height, bottom }: ColumnProps & { marble: THREE.Material }) {
+  const shaftH = height - 0.5;
   const geos = useMemo(() => {
     const base = lathe([
       [0, 0],
@@ -130,13 +108,14 @@ function ProceduralColumn({ marble }: { marble: THREE.Material }) {
     return { base, shaft: flutedShaft(shaftH, 0.088, 0.078), echinus };
   }, [shaftH]);
   return (
-    <group position={[0, COLUMN.bottom, 0]}>
-      <mesh position={[0, 0.04, 0]} castShadow receiveShadow material={marble}>
-        <boxGeometry args={[0.3, 0.08, 0.3]} />
+    <group position={[0, bottom, 0]}>
+      {/* pedestal */}
+      <mesh position={[0, 0.09, 0]} castShadow receiveShadow material={marble}>
+        <boxGeometry args={[0.32, 0.18, 0.3]} />
       </mesh>
-      <mesh geometry={geos.base} position={[0, 0.08, 0]} castShadow receiveShadow material={marble} />
-      <mesh geometry={geos.shaft} position={[0, 0.21 + shaftH / 2, 0]} castShadow receiveShadow material={marble} />
-      <group position={[0, 0.21 + shaftH, 0]}>
+      <mesh geometry={geos.base} position={[0, 0.18, 0]} castShadow receiveShadow material={marble} />
+      <mesh geometry={geos.shaft} position={[0, 0.31 + shaftH / 2, 0]} castShadow receiveShadow material={marble} />
+      <group position={[0, 0.31 + shaftH, 0]}>
         <mesh geometry={geos.echinus} castShadow receiveShadow material={marble} />
         {/* Ionic volutes */}
         {[-1, 1].map((s) => (
@@ -152,39 +131,59 @@ function ProceduralColumn({ marble }: { marble: THREE.Material }) {
   );
 }
 
-export function Columns({ x }: { x: number }) {
-  const left = useOptionalTexture(TEXTURES.columnLeft);
-  const right = useOptionalTexture(TEXTURES.columnRight);
+/** Rose vine spiralling up the front of a column. */
+function climbingRoses(height: number, bottom: number, seed: number) {
+  const rnd = mulberry32(seed);
+  const roses: RoseSpec[] = [];
+  const leaves: LeafSpec[] = [];
+  const colors = ["#f1d2ca", "#ead0c6", "#f6e3da", "#e3b6ae"];
+  const n = 70;
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    const a = t * Math.PI * 5.5 + seed;
+    const front = Math.cos(a); // only the half facing the camera
+    if (front < -0.2) continue;
+    const r = 0.1;
+    const p: [number, number, number] = [Math.sin(a) * r, bottom + 0.3 + t * (height - 0.35), 0.03 + front * r];
+    leaves.push({ p, s: 0.05 + rnd() * 0.03, rot: a + (rnd() - 0.5) * 2, tiltX: 0.3 });
+    if (i % 5 === 0) roses.push({ p: [p[0], p[1], p[2] + 0.02], s: 0.035 + rnd() * 0.02, color: colors[i % colors.length] });
+  }
+  return { roses, leaves };
+}
+
+export function Column({
+  x,
+  height,
+  bottom,
+  vineSeed = 3,
+  side = "left",
+}: ColumnProps & { x: number; vineSeed?: number; side?: "left" | "right" }) {
+  const tex = useOptionalTexture(side === "left" ? TEXTURES.columnLeft : TEXTURES.columnRight);
   const marble = useMemo(() => {
     const t = makeMarble();
     return new THREE.MeshPhysicalMaterial({
       map: t.map,
       normalMap: t.normalMap,
-      normalScale: new THREE.Vector2(0.25, 0.25),
-      roughness: 0.32,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.25,
-      color: "#fbf7f1",
+      normalScale: new THREE.Vector2(0.2, 0.2),
+      roughness: 0.45,
+      clearcoat: 0.2,
+      color: PALETTE.marble,
     });
   }, []);
+  const vine = useMemo(() => climbingRoses(height, bottom, vineSeed), [height, bottom, vineSeed]);
 
+  if (tex) {
+    return (
+      <mesh position={[x, bottom + height / 2, 0]} castShadow receiveShadow>
+        <planeGeometry args={[(height * tex.image.width) / tex.image.height, height]} />
+        <meshStandardMaterial map={tex} alphaTest={0.5} roughness={0.6} side={THREE.DoubleSide} />
+      </mesh>
+    );
+  }
   return (
-    <group>
-      {[
-        { sx: -1, tex: left },
-        { sx: 1, tex: right },
-      ].map(({ sx, tex }) =>
-        tex ? (
-          <mesh key={sx} position={[sx * x, COLUMN.bottom + COLUMN.height / 2, 0]} castShadow receiveShadow>
-            <planeGeometry args={[(COLUMN.height * tex.image.width) / tex.image.height, COLUMN.height]} />
-            <meshStandardMaterial map={tex} alphaTest={0.5} roughness={0.5} side={THREE.DoubleSide} />
-          </mesh>
-        ) : (
-          <group key={sx} position={[sx * x, 0, 0]}>
-            <ProceduralColumn marble={marble} />
-          </group>
-        )
-      )}
+    <group position={[x, 0, 0]}>
+      <ProceduralColumn marble={marble} height={height} bottom={bottom} />
+      <RoseField roses={vine.roses} leaves={vine.leaves} />
     </group>
   );
 }
