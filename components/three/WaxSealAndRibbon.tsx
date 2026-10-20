@@ -13,6 +13,26 @@ import { CARD, PALETTE, TEXTURES, TIMELINE } from "@/lib/invitation.config";
 import { input, useInvitation } from "@/lib/store";
 import { RibbonStrip, v, type StripDef } from "@/lib/ribbon";
 import { normalFromCanvas } from "@/lib/textures";
+
+/** Fine satin weave + soft crinkles as a height map → normal map for the ribbon. */
+function weaveNormal() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 64;
+  const ctx = c.getContext("2d")!;
+  const img = ctx.createImageData(512, 64);
+  for (let y = 0; y < 64; y++)
+    for (let x = 0; x < 512; x++) {
+      const h = 0.5 + 0.18 * Math.sin(x * 1.6) * Math.sin(y * 0.9) + 0.25 * Math.sin(x * 0.045 + Math.sin(y * 0.1) * 2);
+      const i = (y * 512 + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = h * 255;
+      img.data[i + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+  const t = normalFromCanvas(c, 2.5, 0);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
 import { drawSealBouquet, makeFrayedRibbonAlpha } from "@/lib/illustrations";
 import { useOptionalTexture } from "@/lib/assets";
 import { haptic, paperRustle, ribbonSwish, startMusic, waxPop } from "@/lib/audio";
@@ -43,10 +63,10 @@ const STRIPS: StripDef[] = [
   },
   // left loop
   {
-    from: [v(0, Y + 0.01, 0.075), v(-0.13, Y + 0.08, 0.08), v(-0.34, Y + 0.15, 0.075), v(-0.52, Y + 0.08, 0.06), v(-0.5, Y - 0.06, 0.055), v(-0.3, Y - 0.07, 0.06), v(-0.11, Y - 0.03, 0.068), v(0, Y, 0.075)],
+    from: [v(0, Y + 0.01, 0.075), v(-0.13, Y + 0.09, 0.15), v(-0.34, Y + 0.16, 0.19), v(-0.52, Y + 0.08, 0.13), v(-0.5, Y - 0.06, 0.07), v(-0.3, Y - 0.07, 0.05), v(-0.11, Y - 0.03, 0.06), v(0, Y, 0.075)],
     mid: [v(0, Y + 0.01, 0.075), v(-0.17, Y + 0.13, 0.09), v(-0.45, Y + 0.24, 0.09), v(-0.7, Y + 0.12, 0.075), v(-0.68, Y - 0.1, 0.065), v(-0.4, Y - 0.12, 0.07), v(-0.14, Y - 0.05, 0.072), v(0, Y, 0.075)],
     to: [v(-0.5, Y + 0.05, 0.25), v(-0.9, Y + 0.15, 0.35), v(-1.4, Y + 0.25, 0.45), v(-1.9, Y + 0.25, 0.5), v(-2.4, Y + 0.15, 0.5), v(-2.9, Y, 0.45), v(-3.3, Y - 0.15, 0.4), v(-3.7, Y - 0.3, 0.35)],
-    hint: v(0, 0, 1),
+    hint: v(0.25, 0, 1),
     mode: "cross",
     width: 0.16,
     wave: 0.5,
@@ -54,10 +74,10 @@ const STRIPS: StripDef[] = [
   },
   // right loop
   {
-    from: [v(0, Y + 0.01, 0.075), v(0.13, Y + 0.07, 0.08), v(0.35, Y + 0.13, 0.075), v(0.53, Y + 0.06, 0.06), v(0.49, Y - 0.08, 0.055), v(0.29, Y - 0.08, 0.06), v(0.11, Y - 0.03, 0.068), v(0, Y, 0.075)],
+    from: [v(0, Y + 0.01, 0.075), v(0.13, Y + 0.08, 0.15), v(0.35, Y + 0.14, 0.19), v(0.53, Y + 0.06, 0.13), v(0.49, Y - 0.08, 0.07), v(0.29, Y - 0.08, 0.05), v(0.11, Y - 0.03, 0.06), v(0, Y, 0.075)],
     mid: [v(0, Y + 0.01, 0.075), v(0.17, Y + 0.12, 0.09), v(0.46, Y + 0.22, 0.09), v(0.72, Y + 0.1, 0.075), v(0.67, Y - 0.12, 0.065), v(0.39, Y - 0.13, 0.07), v(0.14, Y - 0.05, 0.072), v(0, Y, 0.075)],
     to: [v(0.5, Y + 0.08, 0.25), v(0.9, Y + 0.18, 0.35), v(1.4, Y + 0.28, 0.45), v(1.9, Y + 0.28, 0.5), v(2.4, Y + 0.18, 0.5), v(2.9, Y + 0.05, 0.45), v(3.3, Y - 0.1, 0.4), v(3.7, Y - 0.25, 0.35)],
-    hint: v(0, 0, 1),
+    hint: v(-0.25, 0, 1),
     mode: "cross",
     width: 0.16,
     wave: 0.5,
@@ -65,7 +85,7 @@ const STRIPS: StripDef[] = [
   },
   // left tail, hanging long like the reference
   {
-    from: [v(-0.02, Y - 0.02, 0.07), v(-0.08, Y - 0.17, 0.064), v(-0.15, Y - 0.36, 0.055), v(-0.22, Y - 0.56, 0.047), v(-0.27, Y - 0.78, 0.042)],
+    from: [v(-0.02, Y - 0.02, 0.07), v(-0.08, Y - 0.17, 0.09), v(-0.15, Y - 0.36, 0.05), v(-0.22, Y - 0.56, 0.075), v(-0.27, Y - 0.78, 0.04)],
     mid: [v(-0.02, Y - 0.02, 0.075), v(-0.12, Y - 0.15, 0.07), v(-0.24, Y - 0.32, 0.062), v(-0.36, Y - 0.5, 0.055), v(-0.46, Y - 0.68, 0.05)],
     to: [v(-0.6, Y - 0.2, 0.3), v(-1.1, Y - 0.45, 0.42), v(-1.6, Y - 0.75, 0.5), v(-2.1, Y - 1.05, 0.5), v(-2.6, Y - 1.4, 0.45)],
     hint: v(0, 0, 1),
@@ -76,7 +96,7 @@ const STRIPS: StripDef[] = [
   },
   // right tail
   {
-    from: [v(0.02, Y - 0.02, 0.07), v(0.07, Y - 0.18, 0.064), v(0.13, Y - 0.38, 0.055), v(0.19, Y - 0.58, 0.047), v(0.23, Y - 0.8, 0.042)],
+    from: [v(0.02, Y - 0.02, 0.07), v(0.07, Y - 0.18, 0.05), v(0.13, Y - 0.38, 0.085), v(0.19, Y - 0.58, 0.05), v(0.23, Y - 0.8, 0.07)],
     mid: [v(0.02, Y - 0.02, 0.075), v(0.11, Y - 0.16, 0.07), v(0.23, Y - 0.33, 0.062), v(0.35, Y - 0.52, 0.055), v(0.45, Y - 0.7, 0.05)],
     to: [v(0.6, Y - 0.15, 0.3), v(1.1, Y - 0.4, 0.42), v(1.6, Y - 0.7, 0.5), v(2.1, Y - 1.0, 0.5), v(2.6, Y - 1.35, 0.45)],
     hint: v(0, 0, 1),
@@ -105,6 +125,8 @@ function Ribbon() {
       anisotropy: 0.5,
       alphaMap: alpha,
       alphaTest: 0.35,
+      normalMap: weaveNormal(),
+      normalScale: new THREE.Vector2(0.6, 0.6),
       side: THREE.DoubleSide,
       transparent: true,
     });

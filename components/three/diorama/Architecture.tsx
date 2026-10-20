@@ -46,7 +46,7 @@ export function PaintedFrame({ width, height, lush }: { width: number; height: n
   return (
     <mesh receiveShadow raycast={() => null}>
       <planeGeometry args={[width, height]} />
-      <meshStandardMaterial map={painted ?? map} transparent alphaTest={0.02} roughness={0.95} depthWrite={false} />
+      <meshStandardMaterial map={painted ?? map} transparent alphaTest={0.05} roughness={0.95} />
     </mesh>
   );
 }

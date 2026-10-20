@@ -5,7 +5,7 @@
  */
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, PerformanceMonitor } from "@react-three/drei";
-import { Bloom, DepthOfField, EffectComposer, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { Bloom, DepthOfField, EffectComposer, N8AO, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { BlendFunction, ToneMappingMode, type DepthOfFieldEffect } from "postprocessing";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -13,7 +13,7 @@ import gsap from "gsap";
 import { easing } from "maath";
 import { CARD, TIMELINE } from "@/lib/invitation.config";
 import { input, useInvitation } from "@/lib/store";
-import { POSES, fitDistance, rig, type Pose } from "@/lib/rig";
+import { POSES, fitDistance, recording, rig, type Pose } from "@/lib/rig";
 import { makeGobo } from "@/lib/textures";
 import GatefoldEnvelope from "./GatefoldEnvelope";
 import WaxSealAndRibbon from "./WaxSealAndRibbon";
@@ -21,8 +21,6 @@ import DioramaInterior from "./DioramaInterior";
 import RosePetals3D from "./RosePetals3D";
 
 export default function Scene({ onReady }: { onReady?: () => void }) {
-  // ?render — deterministic frame-by-frame recording (scripts/render-video.mjs)
-  const recording = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("render");
   const [dpr, setDpr] = useState(recording ? 1 : 1.5);
   const [hq, setHq] = useState(true);
   const mobile = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -65,6 +63,7 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
         </TiltGroup>
         <RosePetals3D count={mobile ? 45 : 80} />
         <RosePetals3D count={mobile ? 25 : 45} leaves />
+        <Motes count={mobile ? 120 : 260} />
         <Effects hq={hq && !mobile} />
       </Suspense>
     </Canvas>
@@ -101,18 +100,18 @@ function Lights() {
 
   return (
     <>
-      <ambientLight intensity={0.75} color="#ffffff" />
-      <hemisphereLight args={["#ffffff", "#ebe7e2", 0.6]} />
+      <ambientLight intensity={0.42} color="#fff8f0" />
+      <hemisphereLight args={["#fffaf3", "#d9cfc3", 0.5]} />
       {/* key light — main soft shadows (seal → ribbon, doors → interior) */}
       <directionalLight
         ref={key}
         castShadow
         position={[-1.2, 2.2, 6]}
-        intensity={1.25}
-        color="#ffffff"
-        shadow-intensity={0.45}
+        intensity={1.9}
+        color="#fff4e6"
+        shadow-intensity={0.8}
         shadow-mapSize={[2048, 2048]}
-        shadow-radius={7}
+        shadow-radius={9}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
         shadow-camera-left={-3}
@@ -131,9 +130,9 @@ function Lights() {
         angle={0.55}
         penumbra={0.7}
         decay={0}
-        intensity={0.55}
-        color="#fff8f0"
-        shadow-intensity={0.3}
+        intensity={1.0}
+        color="#fff3e2"
+        shadow-intensity={0.55}
         shadow-mapSize={[1024, 1024]}
         shadow-radius={5}
         shadow-bias={-0.0005}
@@ -162,14 +161,20 @@ function CameraRig() {
 
   useEffect(() => {
     if (phase === "opening") {
-      // Dolly in: glide through the open doors into the diorama
+      // ease back a little so the doors' swing (and their thickness) plays in frame…
+      gsap.to(rig, { halfW: 1.08, halfH: 1.72, duration: 1.5, delay: TIMELINE.flapsOpen - 0.4, ease: "sine.inOut" });
+      // …then dolly in through the open doors into the diorama
       goTo(POSES.slides[0], TIMELINE.cameraDuration, TIMELINE.cameraDolly, "power2.inOut");
       gsap.to(rig, { interior: 1, duration: TIMELINE.cameraDuration, delay: TIMELINE.cameraDolly });
     }
   }, [phase]);
 
   useEffect(() => {
-    if (phase === "open") goTo(POSES.slides[slide], 2.4, 0, "sine.inOut");
+    if (phase !== "open") return;
+    const p = POSES.slides[slide];
+    goTo(p, 2.4, 0, "sine.inOut");
+    // slow cinematic push-in while the page is read
+    tween.current!.to(rig, { halfW: p.halfW * 0.94, halfH: p.halfH * 0.94, duration: 7, ease: "none" });
   }, [slide, phase]);
 
   useFrame(({ clock }, dt) => {
@@ -189,8 +194,9 @@ function CameraRig() {
     const by = Math.sin(t * 0.23 + 1.3) * 0.04 * breathe;
     const bz = Math.sin(t * 0.17) * 0.06;
     // inside the card the camera itself parallaxes across the layers
-    const px = input.tx * 0.12 * rig.interior;
-    const py = input.ty * 0.09 * rig.interior;
+    const par = recording ? 0.22 : 0.12;
+    const px = input.tx * par * rig.interior;
+    const py = input.ty * par * 0.75 * rig.interior;
     const target = new THREE.Vector3(rig.look.x + bx + px, rig.look.y + by + py, rig.look.z + dist + bz);
     easing.damp3(smoothed.current, target, 0.25, dt);
     cam.position.copy(smoothed.current);
@@ -237,7 +243,14 @@ function TiltGroup({ children }: { children: React.ReactNode }) {
     };
   }, [gl]);
 
-  useFrame((_, dt) => {
+  useFrame(({ clock }, dt) => {
+    if (recording) {
+      const t = clock.elapsedTime;
+      // closed card starts at a 3/4 angle and settles; inside, a slow lateral drift
+      const settle = Math.exp(-t * 0.6);
+      input.tx = 0.85 * settle + (1 - settle) * 0.55 * Math.sin(t * 0.33);
+      input.ty = 0.45 * settle + (1 - settle) * 0.35 * Math.sin(t * 0.23 + 1);
+    }
     // 5–8° on the closed card, calmer once we are inside
     const amp = THREE.MathUtils.degToRad(7 - rig.interior * 4.5);
     easing.dampE(g.current.rotation, [-input.ty * amp, input.tx * amp, 0], 0.35, dt);
@@ -257,11 +270,78 @@ function Effects({ hq }: { hq: boolean }) {
   });
   return (
     <EffectComposer multisampling={hq ? 4 : 0}>
-      <DepthOfField ref={dof} worldFocusRange={2.2} bokehScale={hq ? 3.5 : 2.5} />
+      <N8AO halfRes={!recording} aoRadius={0.35} distanceFalloff={0.6} intensity={recording ? 2.6 : 2} color="#3b2f28" quality={recording ? "ultra" : "medium"} />
+      <DepthOfField ref={dof} worldFocusRange={1.25} bokehScale={hq ? 4 : 2.5} />
       <Bloom mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.1} intensity={0.25} radius={0.6} />
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       <Vignette offset={0.35} darkness={0.3} />
-      <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.08} />
+      <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.06} />
     </EffectComposer>
+  );
+}
+
+// ------------------------------------------------- dust motes in the light ---
+/** Warm specks of dust drifting through the light inside the card (twinkle, bokeh near the lens). */
+function Motes({ count }: { count: number }) {
+  const phase = useInvitation((s) => s.phase);
+  const mat = useRef<THREE.ShaderMaterial>(null!);
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const p = new Float32Array(count * 3);
+    const seed = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      p.set([(Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 3.6, -1.1 + Math.random() * 3.2], i * 3);
+      seed[i] = Math.random() * 100;
+    }
+    g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+    g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+    return g;
+  }, [count]);
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uFade: { value: 0 } }), []);
+
+  useEffect(() => {
+    if (phase === "idle") return;
+    const tw = gsap.to(uniforms.uFade, { value: 1, duration: 2.5, delay: TIMELINE.cameraDolly });
+    return () => {
+      tw.kill();
+    };
+  }, [phase, uniforms]);
+
+  useFrame(({ clock }) => {
+    uniforms.uTime.value = clock.elapsedTime;
+  });
+
+  return (
+    <points geometry={geo} frustumCulled={false}>
+      <shaderMaterial
+        ref={mat}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        uniforms={uniforms}
+        vertexShader={/* glsl */ `
+          attribute float aSeed;
+          uniform float uTime;
+          varying float vTw;
+          void main() {
+            vec3 p = position;
+            p.x += sin(uTime * 0.13 + aSeed) * 0.12;
+            p.y += mod(uTime * 0.03 + aSeed, 3.6) - 1.8 - position.y * 0.0;
+            p.z += cos(uTime * 0.11 + aSeed * 1.7) * 0.1;
+            vTw = 0.55 + 0.45 * sin(uTime * (1.5 + fract(aSeed) * 2.0) + aSeed);
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_PointSize = (6.0 + fract(aSeed * 3.1) * 8.0) / -mv.z * 3.0;
+            gl_Position = projectionMatrix * mv;
+          }`}
+        fragmentShader={/* glsl */ `
+          uniform float uFade;
+          varying float vTw;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            float a = smoothstep(0.5, 0.0, d);
+            gl_FragColor = vec4(1.0, 0.94, 0.84, a * a * 0.35 * vTw * uFade);
+          }`}
+      />
+    </points>
   );
 }

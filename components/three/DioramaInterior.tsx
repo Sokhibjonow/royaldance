@@ -95,6 +95,19 @@ function FountainCorner() {
   );
 }
 
+/** Real 3D blooms sitting on the painted frame's corners — they cast shadows onto the page. */
+function FrameRoses({ lush }: { lush: boolean }) {
+  const f = useMemo(() => {
+    const W = PAGE.halfW * 0.95;
+    const H = PAGE.halfH * 0.96;
+    const list = [cluster(W - 0.12, H - 0.18, 0, lush ? 7 : 4, lush ? 0.2 : 0.13, lush ? 61 : 51, 0.07), cluster(W - 0.1, -H + 0.16, 0, 3, 0.12, 52, 0.06)];
+    if (lush) list.push(cluster(W - 0.05, 0.35, 0, 2, 0.1, 63, 0.055), cluster(0.15, H - 0.04, 0, 2, 0.1, 64, 0.05));
+    else list.push(cluster(-W + 0.12, H - 0.12, 0, 2, 0.09, 53, 0.05));
+    return mergeClusters(list);
+  }, [lush]);
+  return <RoseField roses={f.roses} leaves={f.leaves} />;
+}
+
 export default function DioramaInterior() {
   const slide = useInvitation((s) => s.slide);
   const phase = useInvitation((s) => s.phase);
@@ -115,11 +128,17 @@ export default function DioramaInterior() {
       <Fade show={inside && slide >= 1} duration={1.3} delay={0.35}>
         <group position-z={LAYER.frame}>
           <PaintedFrame width={PAGE.halfW * 2 * k} height={PAGE.halfH * 2 * k} lush={false} />
+          <group position-z={0.02}>
+            <FrameRoses lush={false} />
+          </group>
         </group>
       </Fade>
       <Fade show={inside && slide >= 3} duration={1.4}>
         <group position-z={LAYER.frame + 0.002}>
           <PaintedFrame width={PAGE.halfW * 2 * k} height={PAGE.halfH * 2 * k} lush />
+          <group position-z={0.025}>
+            <FrameRoses lush />
+          </group>
         </group>
       </Fade>
 

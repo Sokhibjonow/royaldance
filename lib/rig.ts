@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+/** ?render — deterministic frame-by-frame recording (scripts/render-video.mjs) */
+export const recording = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("render");
+
 /**
  * Shared mutable camera state. The CameraRig tweens `pose` with GSAP,
  * other systems (DOF, petals, gobo) read from it every frame.

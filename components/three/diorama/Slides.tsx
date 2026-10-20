@@ -7,6 +7,7 @@
  * text softens while the scene behind stays crisp.
  */
 import { useFrame } from "@react-three/fiber";
+import { Text } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -29,7 +30,11 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, si
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.direction = opts.rtl ? "rtl" : "ltr";
+  ctx.shadowColor = "rgba(255,255,255,0.75)";
+  ctx.shadowOffsetY = Math.max(1, size * 0.03);
+  ctx.shadowBlur = 0;
   s.split("\n").forEach((line, i) => ctx.fillText(line, x, y + i * size * (opts.lineHeight ?? 1.45)));
+  ctx.shadowColor = "transparent";
 }
 
 /** y as a fraction of the page height → canvas px */
@@ -61,26 +66,6 @@ function pinIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
   ctx.stroke();
 }
 
-/** Brushed-silver calligraphic monogram. */
-function monogram(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number) {
-  ctx.save();
-  ctx.font = `${size}px "Great Vibes", cursive`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const g = ctx.createLinearGradient(x - size * 0.6, y - size * 0.5, x + size * 0.5, y + size * 0.6);
-  g.addColorStop(0, "#9b9a98");
-  g.addColorStop(0.35, "#d9d8d5");
-  g.addColorStop(0.55, "#8a8986");
-  g.addColorStop(0.8, "#c4c3bf");
-  g.addColorStop(1, "#7d7c79");
-  ctx.shadowColor = "rgba(80,70,60,0.25)";
-  ctx.shadowBlur = size * 0.03;
-  ctx.shadowOffsetY = size * 0.015;
-  ctx.fillStyle = g;
-  ctx.fillText(s, x, y);
-  ctx.restore();
-}
-
 const PAGES: Draw[] = [
   // 1 — Bismillah
   (ctx) => text(ctx, I.bismillah, fx(0.5), fy(0.5), 92, AR, { rtl: true, weight: 400 }),
@@ -100,7 +85,6 @@ const PAGES: Draw[] = [
   },
   // 4 — Monogram, date, names, dua
   (ctx) => {
-    monogram(ctx, I.initials, fx(0.5), fy(0.36), 330);
     text(ctx, I.date, fx(0.5), fy(0.515), 38, RU, { weight: 600 });
     ctx.font = `600 66px ${RU}`;
     const gw = 70;
@@ -163,6 +147,7 @@ const fragmentShader = /* glsl */ `
       }
       acc /= 24.0;
     }
+    if (acc.a * uOpacity < 0.04) discard;
     gl_FragColor = acc * uOpacity;
     #include <colorspace_fragment>
   }
@@ -218,7 +203,7 @@ function Page({ index, draw, onClick }: { index: number; draw: Draw; onClick?: (
         fragmentShader,
         transparent: true,
         premultipliedAlpha: true,
-        depthWrite: false,
+        depthWrite: true,
       }),
     []
   );
@@ -260,6 +245,76 @@ function Page({ index, draw, onClick }: { index: number; draw: Draw; onClick?: (
   );
 }
 
+/**
+ * The monogram as real polished silver: SDF text with a metallic physical
+ * material, so the studio light cards and a sweeping glint light run across
+ * the letters as the camera drifts.
+ */
+function Monogram3D() {
+  const slide = useInvitation((s) => s.slide);
+  const phase = useInvitation((s) => s.phase);
+  const group = useRef<THREE.Group>(null!);
+  const glint = useRef<THREE.PointLight>(null!);
+  const vis = useRef({ value: 0 });
+  const active = phase === "open" && slide === 3;
+  const material = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#c9c8c6",
+        metalness: 1,
+        roughness: 0.24,
+        clearcoat: 0.6,
+        clearcoatRoughness: 0.15,
+        envMapIntensity: 2.2,
+        transparent: true,
+        opacity: 0,
+      }),
+    []
+  );
+
+  useEffect(() => {
+    gsap.killTweensOf(vis.current);
+    gsap.to(vis.current, { value: active ? 1 : 0, duration: active ? 1.6 : 0.7, delay: active ? 0.75 : 0, ease: active ? "power2.out" : "power1.in" });
+    if (!active) return;
+    const l = glint.current;
+    const tl = gsap.timeline({ delay: 1.1 });
+    tl.set(l.position, { x: -1.1 })
+      .to(l, { intensity: 3.5, duration: 0.5 }, 0)
+      .to(l.position, { x: 1.1, duration: 2.6, ease: "sine.inOut" }, 0)
+      .to(l, { intensity: 0, duration: 0.6 }, 2.1);
+    return () => {
+      tl.kill();
+    };
+  }, [active]);
+
+  useFrame(({ clock }) => {
+    const v = vis.current.value;
+    group.current.visible = v > 0.002;
+    material.opacity = v;
+    // rises out of the paper and turns gently so the metal catches the light
+    group.current.position.z = (1 - v) * -0.08 + 0.02;
+    group.current.rotation.y = Math.sin(clock.elapsedTime * 0.5) * 0.12;
+    group.current.rotation.x = Math.sin(clock.elapsedTime * 0.37) * 0.05;
+    const s = 0.94 + v * 0.06;
+    group.current.scale.set(s, s, s);
+  });
+
+  return (
+    <group position={[0, PAGE_H * (0.5 - 0.36), 0]}>
+      <pointLight ref={glint} position={[-1.1, 0.1, 0.45]} intensity={0} distance={1.8} decay={1.2} color="#ffffff" />
+      <group ref={group}>
+        <Text font={FONTS_3D.script} fontSize={0.62} anchorX="center" anchorY="middle" material={material} castShadow>
+          {I.initials}
+        </Text>
+      </group>
+    </group>
+  );
+}
+
+// troika parses fonts inside a blob: worker, so URLs must be absolute
+const abs = (p: string) => (typeof window === "undefined" ? p : new URL(p, window.location.href).href);
+const FONTS_3D = { script: abs("/fonts/GreatVibes.woff") };
+
 export function Slides() {
   const openMap = () => window.open(`https://maps.google.com/?q=${encodeURIComponent(I.mapQuery)}`, "_blank", "noopener");
   return (
@@ -267,6 +322,7 @@ export function Slides() {
       {PAGES.map((draw, i) => (
         <Page key={i} index={i} draw={draw} onClick={i === 4 ? openMap : undefined} />
       ))}
+      <Monogram3D />
     </group>
   );
 }

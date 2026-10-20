@@ -29,6 +29,8 @@ const FPS = Number(process.env.FPS || 30);
 const SECONDS = Number(process.env.SECONDS || 31);
 const HOLD = Number(process.env.HOLD || 0.8); // closed card before the seal is tapped
 const FRAMES = process.env.FRAMES_DIR || join(process.cwd(), ".video-frames");
+// SNAP="1,3.5,8" → preview mode: only grab stills at these seconds (coarse 10 fps steps in between)
+const SNAP = process.env.SNAP ? process.env.SNAP.split(",").map(Number) : null;
 
 rmSync(FRAMES, { recursive: true, force: true });
 mkdirSync(FRAMES, { recursive: true });
@@ -78,6 +80,26 @@ await page.goto(`${URL}/?render`, { waitUntil: "load" });
 for (let i = 0; i < 40; i++) {
   await page.evaluate(() => window.__step(1000 / 30));
   await page.waitForTimeout(250);
+}
+if (SNAP) {
+  let t = 0;
+  let tapped = false;
+  for (const at of SNAP) {
+    while (t < at - 1e-6) {
+      if (!tapped && t >= HOLD) {
+        await page.mouse.click(W / 2, H / 2 + H * 0.04);
+        tapped = true;
+      }
+      const step = Math.min(0.1, at - t);
+      await page.evaluate((ms) => window.__step(ms), step * 1000);
+      t += step;
+    }
+    const url = await page.evaluate(() => window.__grab());
+    writeFileSync(join(FRAMES, `snap-${at.toFixed(1)}s.jpg`), Buffer.from(url.split(",")[1], "base64"));
+    console.log("snap", at);
+  }
+  await browser.close();
+  process.exit(0);
 }
 const dt = 1000 / FPS;
 const total = Math.round(SECONDS * FPS);
