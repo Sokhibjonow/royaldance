@@ -263,10 +263,12 @@ function TiltGroup({ children }: { children: React.ReactNode }) {
 }
 
 // ------------------------------------------------------- post-processing ---
+const breakdown = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("pass");
+
 function Effects({ hq }: { hq: boolean }) {
   return (
     <EffectComposer multisampling={hq ? 4 : 0}>
-      <N8AO halfRes={!recording} aoRadius={0.35} distanceFalloff={0.6} intensity={recording ? 2.6 : 2} color="#3b2f28" quality={recording ? "ultra" : "medium"} />
+      {breakdown ? <></>} : <N8AO halfRes={!recording} aoRadius={0.35} distanceFalloff={0.6} intensity={recording ? 2.6 : 2} color="#3b2f28" quality={recording ? "ultra" : "medium"} />
       <Bloom mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.1} intensity={0.25} radius={0.6} />
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       <Vignette offset={0.35} darkness={0.3} />
@@ -348,7 +350,7 @@ function BreakdownPass() {
   useEffect(() => {
     const pass = new URLSearchParams(window.location.search).get("pass");
     if (pass === "wire") scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "#7fd3ff", wireframe: true });
-    if (pass === "clay") scene.overrideMaterial = new THREE.MeshStandardMaterial({ color: "#d9d6d2", roughness: 0.8 });
+    if (pass === "clay") scene.overrideMaterial = new THREE.MeshLambertMaterial({ color: "#dcd8d2" });
     return () => {
       scene.overrideMaterial = null;
     };
