@@ -65,6 +65,7 @@ export default function Scene({ onReady }: { onReady?: () => void }) {
         <RosePetals3D count={mobile ? 25 : 45} leaves />
         <Motes count={mobile ? 120 : 260} />
         <Effects hq={hq && !mobile} />
+        <BreakdownPass />
       </Suspense>
     </Canvas>
   );
@@ -338,4 +339,19 @@ function Motes({ count }: { count: number }) {
       />
     </points>
   );
+}
+
+// -------------------------------------------- ?pass=wire|clay breakdowns ---
+/** Technical render passes for "how it's made" stills: polygon wireframe or untextured clay (light & shadow only). */
+function BreakdownPass() {
+  const { scene } = useThree();
+  useEffect(() => {
+    const pass = new URLSearchParams(window.location.search).get("pass");
+    if (pass === "wire") scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "#7fd3ff", wireframe: true });
+    if (pass === "clay") scene.overrideMaterial = new THREE.MeshStandardMaterial({ color: "#d9d6d2", roughness: 0.8 });
+    return () => {
+      scene.overrideMaterial = null;
+    };
+  }, [scene]);
+  return null;
 }
