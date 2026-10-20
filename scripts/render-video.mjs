@@ -75,7 +75,7 @@ await page.addInitScript(() => {
   };
 });
 
-await page.goto(`${URL}/?render`, { waitUntil: "load" });
+await page.goto(`${URL}/?render${process.env.QUERY ? "&" + process.env.QUERY : ""}`, { waitUntil: "load" });
 // let fonts, procedural textures and shaders settle (real time), stepping the virtual clock slowly
 for (let i = 0; i < 40; i++) {
   await page.evaluate(() => window.__step(1000 / 30));

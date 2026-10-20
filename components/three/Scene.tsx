@@ -5,8 +5,8 @@
  */
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, PerformanceMonitor } from "@react-three/drei";
-import { Bloom, DepthOfField, EffectComposer, N8AO, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
-import { BlendFunction, ToneMappingMode, type DepthOfFieldEffect } from "postprocessing";
+import { Bloom, EffectComposer, N8AO, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { BlendFunction, ToneMappingMode } from "postprocessing";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -263,15 +263,9 @@ function TiltGroup({ children }: { children: React.ReactNode }) {
 
 // ------------------------------------------------------- post-processing ---
 function Effects({ hq }: { hq: boolean }) {
-  const dof = useRef<DepthOfFieldEffect>(null);
-  // the effect auto-focuses on rig.focus, which the camera rig tweens (rack focus)
-  useEffect(() => {
-    if (dof.current) dof.current.target = rig.focus;
-  });
   return (
     <EffectComposer multisampling={hq ? 4 : 0}>
       <N8AO halfRes={!recording} aoRadius={0.35} distanceFalloff={0.6} intensity={recording ? 2.6 : 2} color="#3b2f28" quality={recording ? "ultra" : "medium"} />
-      <DepthOfField ref={dof} worldFocusRange={1.25} bokehScale={hq ? 4 : 2.5} />
       <Bloom mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.1} intensity={0.25} radius={0.6} />
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       <Vignette offset={0.35} darkness={0.3} />
